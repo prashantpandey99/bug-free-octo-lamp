@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Saffron top bar -->
+  <rect x="0" y="0" width="64" height="21.33" fill="#FF9933"/>
+  <!-- White middle bar -->
+  <rect x="0" y="21.33" width="64" height="21.33" fill="#FFFFFF"/>
+  <!-- Green bottom bar -->
+  <rect x="0" y="42.66" width="64" height="21.33" fill="#138808"/>
+  <!-- Ashoka Chakra in Center (24 spokes) -->
+  <g transform="translate(32, 32)">
+    <circle cx="0" cy="0" r="9.5" fill="none" stroke="#000080" stroke-width="1.8"/>
+    <circle cx="0" cy="0" r="2" fill="#000080"/>
+    <!-- Spokes -->
+    <line x1="0" y1="-9" x2="0" y2="9" stroke="#000080" stroke-width="0.9"/>
+    <line x1="-9" y1="0" x2="9" y2="0" stroke="#000080" stroke-width="0.9"/>
+    <line x1="-6.36" y1="-6.36" x2="6.36" y2="6.36" stroke="#000080" stroke-width="0.9"/>
+    <line x1="-6.36" y1="6.36" x2="6.36" y2="-6.36" stroke="#000080" stroke-width="0.9"/>
+    <line x1="-3.44" y1="-8.31" x2="3.44" y2="8.31" stroke="#000080" stroke-width="0.7"/>
+    <line x1="-8.31" y1="-3.44" x2="8.31" y2="3.44" stroke="#000080" stroke-width="0.7"/>
+    <line x1="-8.31" y1="3.44" x2="8.31" y2="-3.44" stroke="#000080" stroke-width="0.7"/>
+    <line x1="-3.44" y1="8.31" x2="3.44" y2="-8.31" stroke="#000080" stroke-width="0.7"/>
+  </g>
+</svg>

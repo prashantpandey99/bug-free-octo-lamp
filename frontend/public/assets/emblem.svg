@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 200" width="160" height="200" fill="none">
+  <!-- State Emblem of India - Ashoka Lion Capital -->
+  <g fill="#0B3B60" stroke="#0B3B60">
+    <!-- Top Central Lion Head & Mane -->
+    <path d="M80 18 C74 18 68 22 66 28 C64 34 65 40 68 44 C67 47 67 52 70 56 C73 60 76 62 80 62 C84 62 87 60 90 56 C93 52 93 47 92 44 C95 40 96 34 94 28 C92 22 86 18 80 18 Z" fill="#0B3B60" stroke-width="1"/>
+    <!-- Central Lion Facial Features -->
+    <ellipse cx="76" cy="33" rx="2.5" ry="3.5" fill="#FFFFFF"/>
+    <ellipse cx="84" cy="33" rx="2.5" ry="3.5" fill="#FFFFFF"/>
+    <circle cx="76" cy="33" r="1.5" fill="#071E33"/>
+    <circle cx="84" cy="33" r="1.5" fill="#071E33"/>
+    <polygon points="80,38 77,44 83,44" fill="#FFFFFF"/>
+    <path d="M74 48 Q80 52 86 48" stroke="#FFFFFF" stroke-width="1.8" fill="none"/>
+    <path d="M78 44 L78 48 M82 44 L82 48" stroke="#FFFFFF" stroke-width="1.2"/>
+
+    <!-- Left Lion Head & Profile -->
+    <path d="M56 26 C50 25 44 29 42 35 C40 41 42 47 45 50 C43 54 44 60 48 64 C52 68 56 68 62 67 C61 62 61 56 63 50 C61 46 59 42 60 36 C61 31 59 27 56 26 Z" fill="#0B3B60" stroke-width="1"/>
+    <ellipse cx="49" cy="38" rx="2.2" ry="3" fill="#FFFFFF"/>
+    <circle cx="48.5" cy="38" r="1.3" fill="#071E33"/>
+    <path d="M44 48 Q49 51 54 48" stroke="#FFFFFF" stroke-width="1.5" fill="none"/>
+
+    <!-- Right Lion Head & Profile -->
+    <path d="M104 26 C110 25 116 29 118 35 C120 41 118 47 115 50 C117 54 116 60 112 64 C108 68 104 68 98 67 C99 62 99 56 97 50 C99 46 101 42 100 36 C99 31 101 27 104 26 Z" fill="#0B3B60" stroke-width="1"/>
+    <ellipse cx="111" cy="38" rx="2.2" ry="3" fill="#FFFFFF"/>
+    <circle cx="111.5" cy="38" r="1.3" fill="#071E33"/>
+    <path d="M106 48 Q111 51 116 48" stroke="#FFFFFF" stroke-width="1.5" fill="none"/>
+
+    <!-- Lion Bodies & Shoulder Muscles -->
+    <path d="M46 64 C42 72 40 85 41 98 C42 105 45 110 52 112 L108 112 C115 110 118 105 119 98 C120 85 118 72 114 64 C107 72 96 76 80 76 C64 76 53 72 46 64 Z" fill="#0B3B60"/>
+
+    <!-- Fur detailing & chest ribbing -->
+    <path d="M60 76 Q68 84 80 84 Q92 84 100 76" stroke="#FFFFFF" stroke-width="1.5" fill="none"/>
+    <path d="M56 88 Q68 96 80 96 Q92 96 104 88" stroke="#FFFFFF" stroke-width="1.5" fill="none"/>
+    <path d="M54 100 Q68 107 80 107 Q92 107 106 100" stroke="#FFFFFF" stroke-width="1.5" fill="none"/>
+    <line x1="80" y1="62" x2="80" y2="110" stroke="#FFFFFF" stroke-width="1.5"/>
+
+    <!-- Legs & Paws Resting on Abacus -->
+    <rect x="48" y="108" width="14" height="6" rx="2" fill="#0B3B60"/>
+    <rect x="68" y="108" width="10" height="6" rx="2" fill="#0B3B60"/>
+    <rect x="82" y="108" width="10" height="6" rx="2" fill="#0B3B60"/>
+    <rect x="98" y="108" width="14" height="6" rx="2" fill="#0B3B60"/>
+
+    <!-- Capital Upper Rim -->
+    <rect x="30" y="114" width="100" height="4" rx="1.5" fill="#0B3B60"/>
+
+    <!-- Abacus Frize Middle Band -->
+    <rect x="34" y="118" width="92" height="26" fill="#F8FAFC" stroke="#0B3B60" stroke-width="2"/>
+
+    <!-- Central Ashoka Chakra in Abacus (24 spokes) -->
+    <circle cx="80" cy="131" r="10" fill="#FFFFFF" stroke="#004B87" stroke-width="2"/>
+    <circle cx="80" cy="131" r="2.5" fill="#004B87"/>
+    <!-- 24 Spokes (rendered cleanly with concentric crosses) -->
+    <line x1="80" y1="121" x2="80" y2="141" stroke="#004B87" stroke-width="1"/>
+    <line x1="70" y1="131" x2="90" y2="131" stroke="#004B87" stroke-width="1"/>
+    <line x1="73" y1="124" x2="87" y2="138" stroke="#004B87" stroke-width="1"/>
+    <line x1="73" y1="138" x2="87" y2="124" stroke="#004B87" stroke-width="1"/>
+    <line x1="71.5" y1="127" x2="88.5" y2="135" stroke="#004B87" stroke-width="0.8"/>
+    <line x1="71.5" y1="135" x2="88.5" y2="127" stroke="#004B87" stroke-width="0.8"/>
+    <line x1="76" y1="121.5" x2="84" y2="140.5" stroke="#004B87" stroke-width="0.8"/>
+    <line x1="84" y1="121.5" x2="76" y2="140.5" stroke="#004B87" stroke-width="0.8"/>
+
+    <!-- Left Abacus: Galloping Horse -->
+    <g transform="translate(40, 122) scale(0.65)" stroke="#0B3B60" fill="#0B3B60">
+      <path d="M4 14 C6 10 10 7 14 8 C16 9 19 6 22 5 C23 9 20 12 18 14 C21 16 23 20 22 24 L20 25 L16 19 L12 24 L10 24 L11 17 C9 18 6 19 4 17 Z" stroke-width="0.5"/>
+    </g>
+
+    <!-- Right Abacus: Charging Bull -->
+    <g transform="translate(98, 122) scale(0.65)" stroke="#0B3B60" fill="#0B3B60">
+      <path d="M22 13 C20 9 16 7 12 8 C10 6 7 7 5 9 C4 13 7 15 9 16 C7 18 5 21 6 25 L8 25 L11 20 L15 25 L17 25 L16 18 C19 18 21 16 22 13 Z" stroke-width="0.5"/>
+    </g>
+
+    <!-- Capital Lower Rim -->
+    <rect x="30" y="144" width="100" height="4" rx="1.5" fill="#0B3B60"/>
+
+    <!-- Inverted Lotus Bell Base -->
+    <path d="M38 148 C42 160 52 165 80 165 C108 165 118 160 122 148 Z" fill="#0B3B60"/>
+    <path d="M50 148 Q60 162 68 148 M68 148 Q80 163 92 148 M92 148 Q100 162 110 148" stroke="#FFFFFF" stroke-width="1.4" fill="none"/>
+    <rect x="42" y="165" width="76" height="3" rx="1" fill="#0B3B60"/>
+
+    <!-- Base Plinth -->
+    <rect x="24" y="168" width="112" height="4" rx="2" fill="#0B3B60"/>
+  </g>
+
+  <!-- National Motto: "सत्यमेव जयते" (Satyameva Jayate) -->
+  <text x="80" y="188" font-family="'Noto Sans', 'Segoe UI', 'Mukta', 'Arial', sans-serif" font-size="14" font-weight="700" fill="#0B3B60" text-anchor="middle" letter-spacing="1">
+    सत्यमेव जयते
+  </text>
+</svg>

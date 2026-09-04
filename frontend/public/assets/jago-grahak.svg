@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 70" width="220" height="70" fill="none">
+  <!-- Official Jago Grahak Jago Crest -->
+  <rect width="220" height="70" rx="8" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1"/>
+  <rect x="4" y="4" width="4" height="62" rx="2" fill="#FF9933"/>
+
+  <!-- Torch / Flame Icon of Vigilant Consumer -->
+  <g transform="translate(18, 12)">
+    <circle cx="18" cy="23" r="16" fill="#FFF7ED" stroke="#EA580C" stroke-width="1.5"/>
+    <!-- Sunburst/Awakening rays -->
+    <path d="M18 10 L18 13 M18 33 L18 36 M6 23 L9 23 M27 23 L30 23 M10 15 L12 17 M24 29 L26 31 M10 31 L12 29 M24 17 L26 15" stroke="#EA580C" stroke-width="1.5" stroke-linecap="round"/>
+    <!-- Eye of Awareness -->
+    <path d="M10 23 Q18 15 26 23 Q18 31 10 23 Z" fill="#FFFFFF" stroke="#0B3B60" stroke-width="1.5"/>
+    <circle cx="18" cy="23" r="3.5" fill="#0B3B60"/>
+    <circle cx="19" cy="22" r="1.2" fill="#FFFFFF"/>
+  </g>
+
+  <!-- Bilingual Slogan -->
+  <text x="62" y="27" font-family="'Noto Sans', 'Segoe UI', 'Mukta', 'Arial', sans-serif" font-size="14" font-weight="800" fill="#9A3412" letter-spacing="0.5">
+    जागो ग्राहक जागो
+  </text>
+  <text x="62" y="43" font-family="'Inter', 'Segoe UI', system-ui, sans-serif" font-size="10.5" font-weight="700" fill="#0B3B60" letter-spacing="0.2">
+    JAGO GRAHAK JAGO
+  </text>
+  <text x="62" y="56" font-family="'Inter', 'Segoe UI', system-ui, sans-serif" font-size="8.5" font-weight="500" fill="#64748B">
+    National Consumer Helpline: 1915
+  </text>
+</svg>

@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 900" width="700" height="900">
+  <defs>
+    <linearGradient id="teaBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#143621"/>
+      <stop offset="40%" stop-color="#1e4d31"/>
+      <stop offset="100%" stop-color="#0c2315"/>
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FCE881"/>
+      <stop offset="50%" stop-color="#D4AF37"/>
+      <stop offset="100%" stop-color="#AA7C11"/>
+    </linearGradient>
+    <filter id="cardShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#000000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Package Background -->
+  <rect width="700" height="900" rx="24" fill="url(#teaBg)"/>
+  
+  <!-- Outer Decorative Border -->
+  <rect x="25" y="25" width="650" height="850" rx="16" fill="none" stroke="url(#goldGrad)" stroke-width="3" stroke-dasharray="8 4"/>
+
+  <!-- Brand Header -->
+  <g transform="translate(350, 90)" text-anchor="middle">
+    <circle cx="0" cy="0" r="36" fill="#D4AF37" opacity="0.15"/>
+    <path d="M-15,10 Q0,-25 15,10 Q0,5 -15,10 Z" fill="url(#goldGrad)"/>
+    <text y="48" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="28" font-weight="800" fill="url(#goldGrad)" letter-spacing="3">GOLDEN LEAF</text>
+    <text y="74" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="16" font-weight="600" fill="#E2E8F0" letter-spacing="4">PREMIUM ASSAM CTC TEA</text>
+  </g>
+
+  <!-- Principal Display Panel (PDP) Box -->
+  <rect x="50" y="200" width="600" height="640" rx="14" fill="#0B1D12" fill-opacity="0.9" stroke="#2D5A3C" stroke-width="1.5" filter="url(#cardShadow)"/>
+
+  <!-- Section: Generic Name -->
+  <g transform="translate(75, 240)">
+    <rect x="-10" y="-18" width="570" height="42" rx="6" fill="#143621"/>
+    <text font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="12" font-weight="700" fill="#94A3B8" letter-spacing="1">COMMON / GENERIC NAME:</text>
+    <text y="24" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="15" font-weight="700" fill="#38BDF8">Black Tea (Broken Orange Pekoe CTC Blend)</text>
+  </g>
+
+  <!-- Section: Net Quantity & Metric Unit (Compliant) -->
+  <g transform="translate(75, 320)">
+    <rect x="-10" y="-12" width="270" height="80" rx="8" fill="#183D27" stroke="#34D399" stroke-width="1.5"/>
+    <text font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="12" font-weight="700" fill="#A7F3D0">NET QUANTITY (Rule 6(1)(c)):</text>
+    <text y="38" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="32" font-weight="800" fill="#FFFFFF">500 g</text>
+    <text y="58" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="10" font-weight="600" fill="#6EE7B7">Standard Metric Unit | Font Ht: 4.2mm (Compliant)</text>
+  </g>
+
+  <!-- Section: MRP and USP -->
+  <g transform="translate(365, 320)">
+    <rect x="-10" y="-12" width="280" height="80" rx="8" fill="#183D27" stroke="#34D399" stroke-width="1.5"/>
+    <text font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="12" font-weight="700" fill="#A7F3D0">MAXIMUM RETAIL PRICE (MRP):</text>
+    <text y="34" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="22" font-weight="800" fill="#FDE047">MRP Rs. 345.00</text>
+    <text y="50" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="11" font-weight="700" fill="#BBF7D0">(inclusive of all taxes)</text>
+    <text y="64" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="10" font-weight="600" fill="#38BDF8">Unit Sale Price: ₹ 0.69 / g</text>
+  </g>
+
+  <!-- Section: Dates & Batch -->
+  <g transform="translate(75, 430)">
+    <rect x="-10" y="-10" width="570" height="58" rx="6" fill="#143621"/>
+    <text font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="12" font-weight="700" fill="#94A3B8">MONTH &amp; YEAR OF PACKING &amp; EXPIRY (Rule 6(1)(d)):</text>
+    <text y="22" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="14" font-weight="700" fill="#F8FAFC">Pkd. Month &amp; Year: 08/2026  |  Batch No: GLT-2026-B84</text>
+    <text y="40" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="12" font-weight="600" fill="#94A3B8">Best Before 12 Months from Packing Date</text>
+  </g>
+
+  <!-- Section: Manufacturer / Packer Details -->
+  <g transform="translate(75, 515)">
+    <text font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="11" font-weight="700" fill="#94A3B8">MANUFACTURED &amp; PACKED BY (Rule 6(1)(a)):</text>
+    <text y="20" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="13" font-weight="600" fill="#E2E8F0">Golden Leaf Tea Estates India Pvt. Ltd.</text>
+    <text y="38" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="12" font-weight="500" fill="#CBD5E1">Plot No. 44, Tea Park Industrial Corridor, G.S. Road, Guwahati, Assam - 781015, India</text>
+    <text y="54" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="11" font-weight="600" fill="#F59E0B">Country of Origin: India  |  FSSAI Lic. No. 10019011000123</text>
+  </g>
+
+  <line x1="65" y1="590" x2="635" y2="590" stroke="#2D5A3C" stroke-width="1"/>
+
+  <!-- Section: Consumer Care Details (Rule 6(1)(n)) -->
+  <g transform="translate(75, 615)">
+    <text font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="11" font-weight="700" fill="#94A3B8">CONSUMER CARE &amp; GRIEVANCE REDRESSAL (Rule 6(1)(n)):</text>
+    <text y="20" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="12" font-weight="600" fill="#E2E8F0">Consumer Care Executive, Golden Leaf Tea Estates India Pvt. Ltd., Address same as above</text>
+    <text y="38" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="13" font-weight="700" fill="#38BDF8">Toll Free: 1800-200-4545  |  Email: care@goldenteaindia.com</text>
+  </g>
+
+  <!-- Statutory Badge -->
+  <g transform="translate(350, 700)" text-anchor="middle">
+    <rect x="-140" y="-12" width="280" height="26" rx="13" fill="#059669" fill-opacity="0.2" stroke="#10B981" stroke-width="1"/>
+    <text y="5" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="11" font-weight="700" fill="#34D399">✓ 100% LMR 2011 STATUTORY COMPLIANT</text>
+  </g>
+
+  <!-- Simulated Barcode -->
+  <g transform="translate(350, 770)" text-anchor="middle">
+    <rect x="-120" y="-15" width="240" height="40" fill="#FFFFFF" rx="4"/>
+    <text y="10" font-family="'Courier New', monospace" font-size="18" font-weight="900" fill="#000000" letter-spacing="4">|| | |||| ||| |||| |</text>
+    <text y="22" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="9" font-weight="600" fill="#334155">8901234567890</text>
+  </g>
+</svg>
