@@ -16,20 +16,49 @@ import {
   Calendar,
   AlertOctagon,
   Eye,
-  Camera
+  Camera,
+  ExternalLink,
+  Activity,
+  Shield,
+  Clock,
+  Users
 } from "lucide-react";
 import CameraInspectionModal from "../components/CameraInspectionModal";
 
 export default function InspectorDashboardPage({ setActiveView }) {
   const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState("registry"); // "registry" or "activity"
   const [inspections, setInspections] = useState([]);
   const [products, setProducts] = useState([]);
+  const [systemActivities, setSystemActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [cameraModalOpen, setCameraModalOpen] = useState(false);
   const [selectedInspection, setSelectedInspection] = useState(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [downloadingId, setDownloadingId] = useState(null);
+
+  const getActionBadge = (action) => {
+    switch (action) {
+      case "EVALUATE_COMPLIANCE":
+        return { label: "Label Verification", color: "#1D4ED8", bg: "#EFF6FF", border: "#BFDBFE" };
+      case "CREATE_INSPECTION":
+      case "RECORD_INSPECTION":
+        return { label: "Section 15 Inspection", color: "#7C3AED", bg: "#F5F3FF", border: "#DDD6FE" };
+      case "GENERATE_REPORT":
+        return { label: "Inspection Docket Sealed", color: "#0D9488", bg: "#F0FDFA", border: "#99F6E4" };
+      case "FILE_COMPLAINT":
+        return { label: "NCH 1915 Grievance", color: "#D97706", bg: "#FFFBEB", border: "#FDE68A" };
+      case "USER_LOGIN":
+        return { label: "Officer Authentication", color: "#059669", bg: "#ECFDF5", border: "#A7F3D0" };
+      case "USER_STATUS_CHANGE":
+        return { label: "Account Governance", color: "#4B5563", bg: "#F3F4F6", border: "#E5E7EB" };
+      case "UPDATE_RULE":
+        return { label: "Statutory Rule Amended", color: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE" };
+      default:
+        return { label: (action || "System Event").replace(/_/g, " "), color: "#1E293B", bg: "#F8FAFC", border: "#CBD5E1" };
+    }
+  };
 
   const handleCameraApplied = (data) => {
     setInspForm((prev) => ({
@@ -60,17 +89,22 @@ export default function InspectorDashboardPage({ setActiveView }) {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [inspList, prodList] = await Promise.all([
-        api.inspections.list(),
-        api.products.list(),
+      const [inspList, prodList, actList] = await Promise.all([
+        api.inspections.list().catch((err) => {
+          console.warn("Notice loading inspections:", err.message);
+          return [];
+        }),
+        api.products.list().catch(() => []),
+        api.dashboard.activity(30).catch(() => []),
       ]);
-      setInspections(inspList);
-      setProducts(prodList);
-      if (prodList.length > 0) {
+      setInspections(inspList || []);
+      setProducts(prodList || []);
+      setSystemActivities(actList || []);
+      if (prodList && prodList.length > 0) {
         setInspForm((prev) => ({ ...prev, product_id: prodList[0].id.toString() }));
       }
     } catch (err) {
-      console.error("Failed to load inspections:", err);
+      console.error("Failed to load inspections data:", err);
     } finally {
       setLoading(false);
     }
@@ -186,31 +220,281 @@ export default function InspectorDashboardPage({ setActiveView }) {
           </div>
         </div>
 
-        {user?.role !== "Inspector" && user?.role !== "Admin" && (
-          <div
+        {/* Officer Tab Switcher */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            marginBottom: "22px",
+            borderBottom: "2px solid #E2E8F0",
+            paddingBottom: "12px",
+            flexWrap: "wrap",
+          }}
+        >
+          <button
+            onClick={() => setActiveTab("registry")}
+            className={`btn ${activeTab === "registry" ? "btn-primary" : "btn-secondary"}`}
             style={{
-              backgroundColor: "#fffbeb",
-              border: "1px solid #fde68a",
-              color: "#92400e",
-              padding: "10px 16px",
-              borderRadius: "8px",
-              fontSize: "13px",
-              marginBottom: "20px",
               display: "flex",
               alignItems: "center",
-              gap: "8px",
+              gap: "7px",
+              padding: "8px 18px",
+              fontWeight: 700,
+              cursor: "pointer",
             }}
           >
-            <span>
-              ℹ️ <strong>Officer Role Required:</strong> Registering field inspections requires Inspector authority. Click <strong>"⚡ Fast Demo Roles"</strong> in the top header and choose <strong>"👮 Inspector Login"</strong> to record field dockets.
+            <FileText size={16} />
+            <span>📋 Field Inspection Registry ({inspections.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("activity")}
+            className={`btn ${activeTab === "activity" ? "btn-primary" : "btn-secondary"}`}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "7px",
+              padding: "8px 18px",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            <Activity size={16} />
+            <span>⚡ Live Field Operations &amp; Audit Trail ({systemActivities.length})</span>
+            <span
+              style={{
+                fontSize: "10px",
+                backgroundColor: activeTab === "activity" ? "rgba(255,255,255,0.25)" : "#DCFCE7",
+                color: activeTab === "activity" ? "#FFFFFF" : "#15803D",
+                padding: "2px 7px",
+                borderRadius: "10px",
+                fontWeight: 800,
+                letterSpacing: "0.5px",
+              }}
+            >
+              LIVE
             </span>
+          </button>
+        </div>
+
+        {/* TAB 1: LIVE FIELD OPERATIONS & AUDIT TRAIL */}
+        {activeTab === "activity" && (
+          <div
+            className="card"
+            style={{
+              padding: 0,
+              overflow: "hidden",
+              marginBottom: "32px",
+              border: "1px solid #CBD5E1",
+              boxShadow: "0 4px 16px rgba(0,0,0,0.06)",
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: "#0B2545",
+                color: "#FFFFFF",
+                padding: "12px 20px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: "10px",
+                fontSize: "12.5px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span
+                  style={{
+                    width: "8px",
+                    height: "8px",
+                    borderRadius: "50%",
+                    backgroundColor: "#22C55E",
+                    boxShadow: "0 0 8px #22C55E",
+                  }}
+                />
+                <strong>National Legal Metrology Enforcement Stream:</strong>
+                <span style={{ opacity: 0.85 }}>Real-time audit log of label checks, inspection entries, and compounding notices</span>
+              </div>
+              <button
+                onClick={loadData}
+                style={{
+                  background: "rgba(255,255,255,0.15)",
+                  border: "1px solid rgba(255,255,255,0.3)",
+                  color: "#FFFFFF",
+                  padding: "4px 10px",
+                  borderRadius: "4px",
+                  fontSize: "11px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <RefreshCw size={11} /> Refresh Log
+              </button>
+            </div>
+
+            <div className="table-responsive">
+              <table className="table" style={{ margin: 0 }}>
+                <thead>
+                  <tr style={{ backgroundColor: "#F8FAFC" }}>
+                    <th style={{ width: "170px" }}>Timestamp (IST)</th>
+                    <th style={{ width: "200px" }}>Action / Operation</th>
+                    <th style={{ width: "110px" }}>Target</th>
+                    <th>Operational Details</th>
+                    <th style={{ width: "220px" }}>Attributed Officer / User</th>
+                    <th style={{ width: "110px" }}>IP Node</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {systemActivities && systemActivities.length > 0 ? (
+                    systemActivities.map((act) => {
+                      const badge = getActionBadge(act.action);
+                      return (
+                        <tr key={act.id}>
+                          <td style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                              <Clock size={11} color="var(--text-muted)" />
+                              <span>{act.timestamp}</span>
+                            </div>
+                          </td>
+                          <td>
+                            <span
+                              style={{
+                                display: "inline-block",
+                                fontSize: "10px",
+                                fontWeight: 700,
+                                padding: "2px 8px",
+                                borderRadius: "4px",
+                                color: badge.color,
+                                backgroundColor: badge.bg,
+                                border: `1px solid ${badge.border}`,
+                                textTransform: "uppercase",
+                              }}
+                            >
+                              {badge.label}
+                            </span>
+                          </td>
+                          <td>
+                            <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
+                              {act.entity || "SYSTEM"}
+                            </span>
+                          </td>
+                          <td style={{ fontSize: "12.5px", color: "var(--text-primary)" }}>
+                            {act.details || "Operation recorded"}
+                          </td>
+                          <td style={{ fontSize: "11.5px", color: "var(--text-secondary)" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                              <Users size={12} color="var(--gov-blue)" />
+                              <span style={{ fontFamily: "var(--font-mono)" }}>{act.user_email}</span>
+                            </div>
+                          </td>
+                          <td style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>
+                            {act.ip_address || "127.0.0.1"}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: "center", padding: "32px", color: "var(--text-muted)" }}>
+                        No system operations recorded in database yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
-        {/* Inspections Table Card */}
-        <div className="card" style={{ padding: 0, overflow: "hidden", marginBottom: "32px" }}>
-          <div className="table-responsive">
-            <table className="table">
+        {/* TAB 2: FIELD INSPECTION REGISTRY TABLE */}
+        {activeTab === "registry" && (
+          <>
+            {user?.role !== "Inspector" && user?.role !== "Admin" && (
+              <div
+                style={{
+                  backgroundColor: "#fffbeb",
+                  border: "1px solid #fde68a",
+                  color: "#92400e",
+                  padding: "10px 16px",
+                  borderRadius: "8px",
+                  fontSize: "13px",
+                  marginBottom: "20px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
+                <span>
+                  ℹ️ <strong>Officer Role Required:</strong> Registering field inspections requires Inspector authority. Please sign in with an official <strong>Legal Metrology Officer account</strong> to record field dockets.
+                </span>
+              </div>
+            )}
+
+            {/* Real Statistical KPI Grid */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
+                gap: "14px",
+                marginBottom: "24px",
+              }}
+            >
+              <div className="card" style={{ padding: "16px 20px" }}>
+                <div style={{ fontSize: "11.5px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
+                  Total Recorded Inspections
+                </div>
+                <div style={{ fontSize: "26px", fontWeight: 800, color: "var(--gov-navy)", marginTop: "4px" }}>
+                  {inspections.length} Dockets
+                </div>
+                <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "2px" }}>
+                  Central Directorate Registry
+                </div>
+              </div>
+
+              <div className="card" style={{ padding: "16px 20px" }}>
+                <div style={{ fontSize: "11.5px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
+                  Seizure / Notices Issued
+                </div>
+                <div style={{ fontSize: "26px", fontWeight: 800, color: "#DC2626", marginTop: "4px" }}>
+                  {inspections.filter((i) => i.status === "NOTICE_ISSUED" || i.status === "SEIZURE_RECOMMENDED").length} Dockets
+                </div>
+                <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "2px" }}>
+                  Section 36 Compounding Initiated
+                </div>
+              </div>
+
+              <div className="card" style={{ padding: "16px 20px" }}>
+                <div style={{ fontSize: "11.5px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
+                  Fully Compliant Packs
+                </div>
+                <div style={{ fontSize: "26px", fontWeight: 800, color: "#16A34A", marginTop: "4px" }}>
+                  {inspections.filter((i) => i.status === "COMPLIANT").length} Dockets
+                </div>
+                <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "2px" }}>
+                  Principal Display Panel Passed
+                </div>
+              </div>
+
+              <div className="card" style={{ padding: "16px 20px" }}>
+                <div style={{ fontSize: "11.5px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
+                  Audit Operations Synced
+                </div>
+                <div style={{ fontSize: "26px", fontWeight: 800, color: "var(--gov-blue)", marginTop: "4px" }}>
+                  {systemActivities.length > 0 ? `${systemActivities.length}+ Logs` : "Active"}
+                </div>
+                <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "2px" }}>
+                  Immutable Audit Ledger
+                </div>
+              </div>
+            </div>
+
+            {/* Inspections Table Card */}
+            <div className="card" style={{ padding: 0, overflow: "hidden", marginBottom: "32px" }}>
+              <div className="table-responsive">
+                <table className="table">
               <thead>
                 <tr>
                   <th>Docket Number</th>
@@ -306,6 +590,8 @@ export default function InspectorDashboardPage({ setActiveView }) {
             </table>
           </div>
         </div>
+        </>
+        )}
 
         {/* Detail Modal */}
         {detailModalOpen && selectedInspection && (

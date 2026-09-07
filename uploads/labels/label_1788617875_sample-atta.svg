@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 900" width="700" height="900">
+  <defs>
+    <linearGradient id="attaBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9A3412"/>
+      <stop offset="50%" stop-color="#B45309"/>
+      <stop offset="100%" stop-color="#78350F"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="700" height="900" rx="24" fill="url(#attaBg)"/>
+  <rect x="25" y="25" width="650" height="850" rx="16" fill="none" stroke="#FDE68A" stroke-width="3"/>
+
+  <!-- Brand Header -->
+  <g transform="translate(350, 85)" text-anchor="middle">
+    <text y="40" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="34" font-weight="900" fill="#FEF08A" letter-spacing="2">SHRESTHA SHUDH</text>
+    <text y="70" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="18" font-weight="700" fill="#FFFFFF" letter-spacing="3">100% WHOLE WHEAT CHAKKI ATTA</text>
+  </g>
+
+  <!-- Principal Display Panel (PDP) Box -->
+  <rect x="50" y="190" width="600" height="660" rx="14" fill="#1C1917" fill-opacity="0.95" stroke="#F59E0B" stroke-width="1.5"/>
+
+  <!-- Generic Name -->
+  <g transform="translate(75, 230)">
+    <text font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="12" font-weight="700" fill="#A8A29E">COMMON / GENERIC NAME:</text>
+    <text y="24" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="15" font-weight="700" fill="#FDE68A">Whole Wheat Flour (Chakki Atta)</text>
+  </g>
+
+  <!-- Net Quantity -->
+  <g transform="translate(75, 305)">
+    <rect x="-10" y="-12" width="270" height="85" rx="8" fill="#14532D" stroke="#22C55E" stroke-width="2"/>
+    <text font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="11" font-weight="700" fill="#86EFAC">NET QUANTITY (Rule 6(1)(c)):</text>
+    <text y="40" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="34" font-weight="900" fill="#FFFFFF">5 kg</text>
+    <text y="60" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="10" font-weight="700" fill="#BBF7D0">✓ Standard Metric Unit | Font Ht: 6.5mm</text>
+  </g>
+
+  <!-- MRP & USP -->
+  <g transform="translate(365, 305)">
+    <rect x="-10" y="-12" width="280" height="85" rx="8" fill="#14532D" stroke="#22C55E" stroke-width="2"/>
+    <text font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="11" font-weight="700" fill="#86EFAC">MAXIMUM RETAIL PRICE (MRP):</text>
+    <text y="34" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="22" font-weight="800" fill="#FEF08A">MRP Rs. 275.00</text>
+    <text y="52" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="11" font-weight="700" fill="#BBF7D0">(inclusive of all taxes)</text>
+    <text y="68" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="10" font-weight="700" fill="#FDE68A">Unit Sale Price: ₹ 55.00 / kg</text>
+  </g>
+
+  <!-- Dates -->
+  <g transform="translate(75, 425)">
+    <rect x="-10" y="-10" width="570" height="52" rx="6" fill="#292524"/>
+    <text font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="12" font-weight="700" fill="#A8A29E">MONTH &amp; YEAR OF PACKING &amp; EXPIRY:</text>
+    <text y="22" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="14" font-weight="700" fill="#F5F5F4">Pkd: 08/2026  |  Batch No: SF-ATT-889</text>
+    <text y="38" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="11" font-weight="600" fill="#FDE68A">Best Before 6 Months from date of packaging</text>
+  </g>
+
+  <!-- Manufacturer -->
+  <g transform="translate(75, 515)">
+    <text font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="11" font-weight="700" fill="#A8A29E">MANUFACTURED &amp; PACKED BY (Rule 6(1)(a)):</text>
+    <text y="20" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="13" font-weight="600" fill="#FFFFFF">Shrestha Agro Foods Limited</text>
+    <text y="38" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="12" font-weight="500" fill="#D6D3D1">Plot No. 101, Agro Food Park, NH-48, Gurugram, Haryana - 122004, India</text>
+    <text y="54" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="11" font-weight="600" fill="#86EFAC">Country of Origin: India  |  FSSAI Lic. No. 10018064000543</text>
+  </g>
+
+  <line x1="65" y1="590" x2="635" y2="590" stroke="#44403C" stroke-width="1"/>
+
+  <!-- Consumer Care -->
+  <g transform="translate(75, 615)">
+    <text font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="11" font-weight="700" fill="#A8A29E">CONSUMER CARE &amp; REDRESSAL CELL (Rule 6(1)(n)):</text>
+    <text y="20" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="12" font-weight="600" fill="#E2E8F0">Manager, Consumer Care Cell, Shrestha Agro Foods Ltd, Address same as above</text>
+    <text y="38" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="13" font-weight="700" fill="#38BDF8">Toll Free: 1800-444-2222  |  Email: care@shresthafoods.com</text>
+  </g>
+
+  <!-- Statutory Badge -->
+  <g transform="translate(350, 700)" text-anchor="middle">
+    <rect x="-140" y="-12" width="280" height="26" rx="13" fill="#059669" fill-opacity="0.25" stroke="#10B981" stroke-width="1"/>
+    <text y="5" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="11" font-weight="700" fill="#34D399">✓ 100% LMR 2011 STATUTORY COMPLIANT</text>
+  </g>
+
+  <!-- Barcode -->
+  <g transform="translate(350, 770)" text-anchor="middle">
+    <rect x="-120" y="-15" width="240" height="40" fill="#FFFFFF" rx="4"/>
+    <text y="10" font-family="'Courier New', monospace" font-size="18" font-weight="900" fill="#000000" letter-spacing="4">||| |||| | ||| || |||</text>
+    <text y="22" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="9" font-weight="600" fill="#334155">8902233445566</text>
+  </g>
+</svg>

@@ -1,7 +1,18 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
+import { BrowserMultiFormatReader } from "@zxing/browser";
 import { api } from "../services/api";
 import {
+  resolveBarcodeProduct,
+  getGS1Country,
+  evaluateRule6Declarations,
+  parseOcrTextToDeclarations,
+  KNOWN_INDIAN_PRODUCTS,
+} from "../services/barcodeService";
+import Tesseract from "tesseract.js";
+import {
   Camera,
+  Video,
   RefreshCw,
   X,
   CheckCircle,
@@ -14,415 +25,589 @@ import {
   ArrowRight,
   Upload,
   ShieldCheck,
-  FileText,
   RotateCcw,
   Sparkles,
+  Info,
+  Settings,
+  Lock,
+  Barcode,
+  Scan,
+  Tag,
+  Activity,
+  Volume2,
+  VolumeX,
+  Image as ImageIcon,
+  Check,
+  Layers,
+  HelpCircle,
 } from "lucide-react";
 
-export default function CameraInspectionModal({ isOpen, onClose, onApplyData }) {
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const streamRef = useRef(null);
+// Web Audio synthesizer beep for real-time barcode detection
+function playScannerBeep() {
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(880, ctx.currentTime); // High pitch supermarket scanner beep
+    osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.08);
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.12);
+  } catch {
+    // Audio may be blocked by browser gesture policies
+  }
+}
 
+export default function CameraInspectionModal({ isOpen, onClose, onApplyData }) {
+  const html5QrCodeRef = useRef(null);
+  const isStartingRef = useRef(false);
+  const lastScannedCodeRef = useRef("");
+  const scanContainerId = "html5-barcode-scanner-viewport";
+
+  // Camera & Stream States
+  const [permissionState, setPermissionState] = useState("prompt"); // "prompt", "granted", "denied", "requesting", "error", "unsupported"
+  const [isCameraLoading, setIsCameraLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [facingMode, setFacingMode] = useState("environment"); // "environment" for rear/mobile, "user" for webcam
-  const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
+  const [cameraError, setCameraError] = useState("");
+  const [availableDevices, setAvailableDevices] = useState([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState("");
+  const [facingMode, setFacingMode] = useState("environment"); // "environment" (rear camera) or "user" (desktop webcam/front)
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
-  const [cameraError, setCameraError] = useState("");
+  const [soundEnabled, setSoundEnabled] = useState(true);
 
-  const [capturedBlob, setCapturedBlob] = useState(null);
+  // Camera Specs (HUD)
+  const [cameraDetails, setCameraDetails] = useState({
+    label: "Rear Camera / Webcam",
+    width: 1280,
+    height: 720,
+    frameRate: 30,
+    aspectRatio: "16:9",
+  });
+  const [showDetailsPanel, setShowDetailsPanel] = useState(false);
+
+  // Barcode & Product Intelligence States
+  const [liveBarcode, setLiveBarcode] = useState(null);
+  const [isResolvingProduct, setIsResolvingProduct] = useState(false);
+  const [liveDetectedProduct, setLiveDetectedProduct] = useState(null);
+  const [normalizedDeclarations, setNormalizedDeclarations] = useState(null);
+  const [ruleDeclarations, setRuleDeclarations] = useState([]);
+  const [complianceSummary, setComplianceSummary] = useState(null);
+  const [lookupSource, setLookupSource] = useState("");
+  const [lookupError, setLookupError] = useState("");
+
+  // Snapshot & Inspection States
+  const [_capturedBlob, setCapturedBlob] = useState(null);
   const [capturedPreview, setCapturedPreview] = useState(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [ocrResult, setOcrResult] = useState(null);
-  const [ruleChecklist, setRuleChecklist] = useState([]);
+  const [capturedMetadata, setCapturedMetadata] = useState(null);
+  const [isFlashing, setIsFlashing] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
-  // Check available camera devices
-  const checkCameraDevices = useCallback(async () => {
+  // Stop html5-qrcode scanner cleanly
+  const stopCamera = useCallback(async () => {
+    if (html5QrCodeRef.current) {
+      try {
+        if (html5QrCodeRef.current.isScanning) {
+          await html5QrCodeRef.current.stop();
+        }
+        await html5QrCodeRef.current.clear();
+      } catch (err) {
+        console.warn("Camera stop warning:", err);
+      }
+      html5QrCodeRef.current = null;
+    }
+    setIsStreaming(false);
+    setIsCameraLoading(false);
+    setTorchOn(false);
+  }, []);
+
+  // Enumerate available video inputs
+  const enumerateCameras = useCallback(async () => {
     try {
-      if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoInputs = devices.filter((d) => d.kind === "videoinput");
-        setHasMultipleCameras(videoInputs.length > 1);
+      if (Html5Qrcode && Html5Qrcode.getCameras) {
+        const devices = await Html5Qrcode.getCameras();
+        if (devices && devices.length > 0) {
+          setAvailableDevices(devices);
+          return devices;
+        }
       }
     } catch (e) {
       console.warn("Could not enumerate camera devices:", e);
     }
+    return [];
   }, []);
 
-  // Stop camera helper
-  const stopCamera = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => {
-        try {
-          track.stop();
-        } catch (e) {
-          // ignore
-        }
-      });
-      streamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    setIsStreaming(false);
-    setTorchOn(false);
-  }, []);
+  // Handle a detected barcode value
+  const handleBarcodeDetected = useCallback(
+    async (code, format = "EAN-13") => {
+      if (!code) return;
+      const cleanCode = code.toString().trim();
+      if (cleanCode === lastScannedCodeRef.current) return;
+      lastScannedCodeRef.current = cleanCode;
 
-  // Start camera helper
-  const startCamera = useCallback(
-    async (mode) => {
-      stopCamera();
-      setCameraError("");
-
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setCameraError("Camera access is not supported in this browser. Please use photo upload.");
-        return;
+      if (soundEnabled) {
+        playScannerBeep();
       }
 
+      setLiveBarcode({
+        code: cleanCode,
+        format: format ? format.toUpperCase() : (cleanCode.length === 13 ? "EAN-13" : "UPC-A"),
+        timestamp: new Date().toLocaleTimeString(),
+        gs1_country: getGS1Country(cleanCode),
+      });
+
+      setIsResolvingProduct(true);
+      setLookupError("");
+
       try {
-        const constraints = {
-          video: {
-            facingMode: { ideal: mode },
-            width: { ideal: 1920, min: 640 },
-            height: { ideal: 1080, min: 480 },
-          },
-          audio: false,
-        };
+        // Multi-Tier Product Resolution:
+        // 1. Indian FMCG Local Catalog
+        // 2. Open Food Facts v2 API (https://world.openfoodfacts.org/api/v2/product/{barcode}.json)
+        // 3. UPCitemdb API Fallback (https://api.upcitemdb.com/prod/trial/lookup?upc={barcode})
+        // 4. Backend Database Proxy
+        const result = await resolveBarcodeProduct(cleanCode);
 
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        streamRef.current = stream;
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-        }
-        setIsStreaming(true);
-
-        // Check torch support
-        const videoTrack = stream.getVideoTracks()[0];
-        if (videoTrack && typeof videoTrack.getCapabilities === "function") {
-          const caps = videoTrack.getCapabilities();
-          setTorchSupported(!!caps.torch);
+        if (result && result.found && result.product) {
+          setLiveDetectedProduct(result.product);
+          setNormalizedDeclarations(result.declarations_payload || null);
+          setRuleDeclarations(result.declarations || []);
+          setComplianceSummary(result.compliance_summary || null);
+          setLookupSource(result.source || "Product Database");
+          setLookupError("");
         } else {
-          setTorchSupported(false);
+          setLiveDetectedProduct(null);
+          setNormalizedDeclarations(result?.declarations_payload || null);
+          setRuleDeclarations([]);
+          setComplianceSummary(null);
+          setLookupSource("");
+          setLookupError(
+            result?.message ||
+              "Product not found in database. Please verify label manually as per Legal Metrology Rules."
+          );
         }
       } catch (err) {
-        console.warn("Camera start failed:", err);
-        if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-          setCameraError("Camera permission was denied. Please allow camera access in your browser settings or upload a label photo.");
-        } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
-          setCameraError("No camera hardware detected on this device. Please upload a label photo.");
-        } else {
-          setCameraError(`Camera connection error (${err.message || "Unknown"}). You can upload a photo instead.`);
-        }
-        setIsStreaming(false);
+        console.warn("Barcode resolution error:", err);
+        setLookupError(
+          "Product not found in database. Please verify label manually as per Legal Metrology Rules."
+        );
+      } finally {
+        setIsResolvingProduct(false);
       }
     },
-    [stopCamera]
+    [soundEnabled]
   );
 
-  // Initialize or teardown camera stream when modal opens/closes
-  useEffect(() => {
-    if (isOpen) {
-      checkCameraDevices();
-      setCapturedBlob(null);
-      setCapturedPreview(null);
-      setOcrResult(null);
-      setRuleChecklist([]);
+  // Start Html5Qrcode scanner stream
+  const startCamera = useCallback(
+    async (deviceId = null, mode = "environment") => {
+      if (isStartingRef.current) return;
+      isStartingRef.current = true;
+
+      await stopCamera();
       setCameraError("");
-      startCamera(facingMode);
-    } else {
-      stopCamera();
-    }
-    return () => {
-      stopCamera();
-    };
-  }, [isOpen, facingMode, checkCameraDevices, startCamera, stopCamera]);
+      setIsCameraLoading(true);
+      setPermissionState("requesting");
 
-  // Toggle Torch / Flashlight
-  const toggleTorch = async () => {
-    if (!streamRef.current) return;
-    const track = streamRef.current.getVideoTracks()[0];
-    if (track && torchSupported) {
       try {
-        const nextState = !torchOn;
-        await track.applyConstraints({
-          advanced: [{ torch: nextState }],
-        });
-        setTorchOn(nextState);
+        const container = document.getElementById(scanContainerId);
+        if (!container) {
+          setIsCameraLoading(false);
+          isStartingRef.current = false;
+          return;
+        }
+
+        const scanner = new Html5Qrcode(scanContainerId);
+        html5QrCodeRef.current = scanner;
+
+        const scanConfig = {
+          fps: 15,
+          qrbox: (viewfinderWidth, viewfinderHeight) => {
+            const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+            return {
+              width: Math.floor(minEdge * 0.9),
+              height: Math.floor(minEdge * 0.55),
+            };
+          },
+          formatsToSupport: [
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.QR_CODE,
+          ],
+          aspectRatio: 1.333333,
+          disableFlip: false,
+        };
+
+        const cameraConfig = deviceId
+          ? { deviceId: { exact: deviceId } }
+          : { facingMode: mode }; // Mobile rear camera ('environment') or desktop webcam
+
+        await scanner.start(
+          cameraConfig,
+          scanConfig,
+          (decodedText, decodedResult) => {
+            const fmt = decodedResult?.result?.format?.formatName || "EAN-13";
+            handleBarcodeDetected(decodedText, fmt);
+          },
+          () => {
+            // Frame scanned, no barcode in current frame (expected normal operation)
+          }
+        );
+
+        setIsStreaming(true);
+        setIsCameraLoading(false);
+        setPermissionState("granted");
+
+        // Inspect active video track for torch and capabilities
+        try {
+          const videoElem = document.querySelector(`#${scanContainerId} video`);
+          if (videoElem && videoElem.srcObject) {
+            const track = videoElem.srcObject.getVideoTracks()[0];
+            if (track) {
+              const caps = track.getCapabilities ? track.getCapabilities() : {};
+              const settings = track.getSettings ? track.getSettings() : {};
+              setTorchSupported(!!caps.torch);
+              setCameraDetails({
+                label: track.label || (mode === "environment" ? "Mobile Rear Camera" : "Webcam"),
+                width: settings.width || 1280,
+                height: settings.height || 720,
+                frameRate: Math.round(settings.frameRate || 30),
+                aspectRatio:
+                  settings.width && settings.height
+                    ? `${Math.round((settings.width / settings.height) * 10) / 10}:1`
+                    : "16:9",
+              });
+            }
+          }
+        } catch {
+          // Ignore capability check failures
+        }
+
+        await enumerateCameras();
       } catch (err) {
-        console.warn("Could not toggle torch:", err);
+        console.warn("Could not start html5-qrcode camera:", err);
+        setIsStreaming(false);
+        setIsCameraLoading(false);
+
+        if (err?.name === "NotAllowedError" || String(err).includes("NotAllowedError") || String(err).includes("Permission")) {
+          setPermissionState("denied");
+          setCameraError("Camera permission was denied. Please allow camera access in browser site settings or upload an image.");
+        } else if (err?.name === "NotFoundError" || String(err).includes("NotFoundError")) {
+          setPermissionState("error");
+          setCameraError("No camera hardware detected on this device. Please connect a webcam or upload a photo.");
+        } else {
+          setPermissionState("error");
+          setCameraError(`Camera connection notice: ${err?.message || err}. Please try switching camera or uploading a label photo.`);
+        }
+      } finally {
+        isStartingRef.current = false;
       }
-    }
+    },
+    [stopCamera, handleBarcodeDetected, enumerateCameras]
+  );
+
+  // Switch between Rear camera and Front/Webcam
+  const switchCameraFacing = async () => {
+    const nextMode = facingMode === "environment" ? "user" : "environment";
+    setFacingMode(nextMode);
+    setSelectedDeviceId("");
+    await startCamera(null, nextMode);
   };
 
-  // Toggle front / back camera
-  const switchCameraFacing = () => {
-    const next = facingMode === "environment" ? "user" : "environment";
-    setFacingMode(next);
+  // Change specific camera device from dropdown
+  const handleDeviceChange = async (e) => {
+    const devId = e.target.value;
+    setSelectedDeviceId(devId);
+    await startCamera(devId, facingMode);
   };
 
-  // Evaluate Rule 6 Checklist based on OCR extracted fields
-  const buildRuleChecklist = (fields, rawText) => {
-    const checklist = [];
-
-    // 1. Rule 6(1)(a) - Manufacturer / Packer Details
-    const hasMfgName = !!(fields.manufacturer_name && fields.manufacturer_name.trim());
-    const hasMfgAddr = !!(fields.manufacturer_address && fields.manufacturer_address.trim());
-    const hasPin = /\b\d{6}\b/.test(fields.manufacturer_address || rawText || "");
-    const rule1Passed = hasMfgName && (hasMfgAddr || hasPin);
-    checklist.push({
-      rule: "Rule 6(1)(a)",
-      title: "Name & Address of Manufacturer / Packer",
-      status: rule1Passed ? "PASSED" : "FAILED",
-      detail: rule1Passed
-        ? `${fields.manufacturer_name || "Manufacturer declared"} with postal details`
-        : "Missing complete manufacturer/packer postal address or PIN code.",
-      severity: "HIGH",
-    });
-
-    // 2. Rule 6(1)(b) - Generic Commodity Name
-    const hasGeneric = !!(fields.generic_name || fields.product_name);
-    checklist.push({
-      rule: "Rule 6(1)(b)",
-      title: "Common / Generic Commodity Name",
-      status: hasGeneric ? "PASSED" : "FAILED",
-      detail: hasGeneric
-        ? (fields.generic_name || fields.product_name)
-        : "Generic commodity identity is missing or illegible on Principal Display Panel.",
-      severity: "HIGH",
-    });
-
-    // 3. Rule 6(1)(c) - Net Quantity & Metric Units
-    const qty = fields.net_quantity;
-    const unit = (fields.unit || "").toLowerCase();
-    const illegalUnits = ["gms", "gm.", "kgs", "ltrs", "ltr"];
-    const isIllegalUnit = illegalUnits.includes(unit);
-    const validMetric = ["g", "kg", "ml", "l", "n", "u"].includes(unit);
-    let rule3Passed = false;
-    let rule3Detail = "";
-
-    if (isIllegalUnit) {
-      rule3Passed = false;
-      rule3Detail = `Illegal unit abbreviation '${unit}' detected. Must use standard '${unit === "gms" ? "g" : "kg/l"}'.`;
-    } else if (qty && validMetric) {
-      rule3Passed = true;
-      rule3Detail = `Declared Net Quantity: ${qty} ${unit} (Standard Metric compliant)`;
-    } else if (qty) {
-      rule3Passed = true;
-      rule3Detail = `Declared: ${qty} ${unit || "units"}`;
-    } else {
-      rule3Passed = false;
-      rule3Detail = "Net quantity declaration not found or non-standard.";
-    }
-
-    checklist.push({
-      rule: "Rule 6(1)(c)",
-      title: "Net Quantity in Standard Metric Units",
-      status: rule3Passed ? "PASSED" : "FAILED",
-      detail: rule3Detail,
-      severity: "CRITICAL",
-    });
-
-    // 4. Rule 6(1)(d) - Date of Mfg / Packing
-    const hasDate = !!fields.manufacturing_date;
-    checklist.push({
-      rule: "Rule 6(1)(d)",
-      title: "Month & Year of Manufacture / Packing",
-      status: hasDate ? "PASSED" : "FAILED",
-      detail: hasDate
-        ? `Declared Date: ${fields.manufacturing_date}`
-        : "Date of packing/manufacture (MM/YYYY) is missing or illegible.",
-      severity: "HIGH",
-    });
-
-    // 5. Rule 6(1)(e) - Maximum Retail Price (MRP) & Tax Inclusion
-    const hasMrp = !!fields.mrp;
-    const mrpText = (fields.mrp_declaration_text || rawText || "").toLowerCase();
-    const hasTaxesPhrase =
-      mrpText.includes("inclusive of all taxes") ||
-      mrpText.includes("incl. of all taxes") ||
-      mrpText.includes("incl of all taxes") ||
-      mrpText.includes("incl. all taxes");
-
-    let rule5Status = "PASSED";
-    let rule5Detail = "";
-    if (!hasMrp) {
-      rule5Status = "FAILED";
-      rule5Detail = "Maximum Retail Price (MRP) declaration is missing.";
-    } else if (!hasTaxesPhrase) {
-      rule5Status = "FAILED";
-      rule5Detail = `MRP declared (₹${fields.mrp}) but missing mandatory 'inclusive of all taxes' statutory phrase.`;
-    } else {
-      rule5Status = "PASSED";
-      rule5Detail = `MRP ₹${fields.mrp} (Mandatory tax inclusive declaration verified)`;
-    }
-
-    checklist.push({
-      rule: "Rule 6(1)(e)",
-      title: "Maximum Retail Price (MRP) + Taxes Declaration",
-      status: rule5Status,
-      detail: rule5Detail,
-      severity: "CRITICAL",
-    });
-
-    // 6. Rule 6(1)(f) - Unit Sale Price (USP) for > 1kg / 1L
-    const needsUsp = qty && ((unit === "kg" && qty > 1) || (unit === "l" && qty > 1) || (unit === "g" && qty > 1000));
-    const hasUsp = !!fields.unit_sale_price;
-    let rule6Status = "PASSED";
-    let rule6Detail = "";
-
-    if (needsUsp && !hasUsp) {
-      rule6Status = "FAILED";
-      rule6Detail = "Package exceeds 1 kg/L threshold: Unit Sale Price (₹/g or ₹/kg) is mandatory but missing.";
-    } else if (hasUsp) {
-      rule6Status = "PASSED";
-      rule6Detail = `Unit Sale Price declared: ${fields.unit_sale_price}`;
-    } else {
-      rule6Status = "PASSED";
-      rule6Detail = "Exempt or not required for small individual retail unit pack.";
-    }
-
-    checklist.push({
-      rule: "Rule 6(1)(f)",
-      title: "Unit Sale Price (USP)",
-      status: rule6Status,
-      detail: rule6Detail,
-      severity: "MEDIUM",
-    });
-
-    // 7. Rule 6(1)(g) - Consumer Care Cell
-    const hasCarePhone = !!fields.customer_care_phone;
-    const hasCareEmail = !!fields.customer_care_email;
-    const rule7Passed = hasCarePhone || hasCareEmail;
-    checklist.push({
-      rule: "Rule 6(1)(g)",
-      title: "Consumer Care Contact Cell",
-      status: rule7Passed ? "PASSED" : "FAILED",
-      detail: rule7Passed
-        ? `Helpline: ${fields.customer_care_phone || "Declared"} | Email: ${fields.customer_care_email || "Declared"}`
-        : "Consumer grievance contact helpline/email address is missing.",
-      severity: "HIGH",
-    });
-
-    return checklist;
-  };
-
-  // Analyze Image Blob using Backend OCR API
-  const analyzeImageBlob = async (blob, previewUrl) => {
-    setIsAnalyzing(true);
+  // Toggle Torch / Flashlight (Mobile Rear Cameras)
+  const toggleTorch = async () => {
+    if (!html5QrCodeRef.current) return;
     try {
-      const file = new File([blob], `camera_snapshot_${Date.now()}.jpg`, { type: "image/jpeg" });
-      const res = await api.ocr.extract(file);
-
-      setOcrResult(res);
-      const fields = res?.extracted_fields || {};
-      const rawText = res?.raw_text || "";
-      const checklist = buildRuleChecklist(fields, rawText);
-      setRuleChecklist(checklist);
-    } catch (err) {
-      console.error("Camera OCR extraction error:", err);
-      // Fallback heuristic evaluation so the user flow never dead-ends
-      const fallbackFields = {
-        product_name: "Packaged Commodity (Camera Scan)",
-        generic_name: "Packaged Food / Grocery",
-        net_quantity: 1,
-        unit: "kg",
-        mrp: 195.0,
-        mrp_declaration_text: "MRP Rs. 195.00 (inclusive of all taxes)",
-        unit_sale_price: "₹ 195.00 per kg",
-        manufacturing_date: "08/2026",
-        batch_number: "CS-2026-LIVE",
-        manufacturer_name: "Packaging Unit India",
-        manufacturer_address: "Sector 4, Industrial Area, Sonepat - 131001",
-        customer_care_phone: "1800-180-2233",
-        customer_care_email: "care@packageinspection.gov.in",
-        country_of_origin: "India",
-      };
-      setOcrResult({
-        confidence: 91.5,
-        extracted_fields: fallbackFields,
-        raw_text: "Camera Frame Optical Extraction Complete",
+      const nextState = !torchOn;
+      await html5QrCodeRef.current.applyVideoConstraints({
+        advanced: [{ torch: nextState }],
       });
-      setRuleChecklist(buildRuleChecklist(fallbackFields, ""));
-    } finally {
-      setIsAnalyzing(false);
+      setTorchOn(nextState);
+    } catch (err) {
+      console.warn("Torch toggle not supported on current device:", err);
     }
   };
 
-  // Capture current video frame to Canvas
-  const captureFrame = () => {
-    if (!videoRef.current) return;
-    const video = videoRef.current;
-    const canvas = canvasRef.current || document.createElement("canvas");
+  // Capture photograph snapshot and trigger full OCR & Barcode verification
+  const capturePhotograph = async () => {
+    const videoElem = document.querySelector(`#${scanContainerId} video`);
+    if (!videoElem) return;
 
-    canvas.width = video.videoWidth || 1280;
-    canvas.height = video.videoHeight || 720;
+    setIsFlashing(true);
+    setTimeout(() => setIsFlashing(false), 300);
+
+    const canvas = document.createElement("canvas");
+    const width = videoElem.videoWidth || 1280;
+    const height = videoElem.videoHeight || 720;
+    canvas.width = width;
+    canvas.height = height;
+
     const ctx = canvas.getContext("2d");
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(videoElem, 0, 0, width, height);
 
     canvas.toBlob(
-      (blob) => {
+      async (blob) => {
         if (!blob) return;
         const previewUrl = URL.createObjectURL(blob);
         setCapturedBlob(blob);
         setCapturedPreview(previewUrl);
-        stopCamera();
-        analyzeImageBlob(blob, previewUrl);
+        setCapturedMetadata({
+          width,
+          height,
+          sizeKb: Math.round(blob.size / 1024),
+          timestamp: new Date().toLocaleTimeString(),
+        });
+        await stopCamera();
+
+        // 1. Try decoding high-res barcode from the captured canvas image using ZXing
+        let detectedBarcode = liveBarcode?.code || "";
+        try {
+          const zxing = new BrowserMultiFormatReader();
+          const img = new Image();
+          img.src = previewUrl;
+          await img.decode();
+          const zxingRes = await zxing.decodeFromImageElement(img);
+          if (zxingRes && zxingRes.getText()) {
+            detectedBarcode = zxingRes.getText();
+            setLiveBarcode({
+              code: detectedBarcode,
+              format: zxingRes.getBarcodeFormat()?.toString() || "EAN-13",
+              timestamp: new Date().toLocaleTimeString(),
+              gs1_country: getGS1Country(detectedBarcode),
+            });
+          }
+        } catch {
+          // Barcode might be obscured or off-center
+        }
+
+        // 2. Perform Real Optical Character Recognition (OCR) on the label
+        setIsResolvingProduct(true);
+        setLookupError("");
+
+        try {
+          let parsedData = null;
+
+          // Attempt client-side Tesseract.js directly on high-res canvas
+          try {
+            const tessRes = await Tesseract.recognize(canvas, "eng");
+            if (tessRes?.data?.text) {
+              parsedData = parseOcrTextToDeclarations(tessRes.data.text, detectedBarcode);
+            }
+          } catch (tessErr) {
+            console.warn("Client Tesseract recognition notice:", tessErr);
+          }
+
+          // If client OCR couldn't extract enough fields, try backend OCR API
+          if (!parsedData || !parsedData.product?.mrp) {
+            try {
+              const ocrRes = await api.ocr.extract(blob);
+              if (ocrRes?.raw_text) {
+                const backendParsed = parseOcrTextToDeclarations(ocrRes.raw_text, detectedBarcode);
+                if (backendParsed) parsedData = backendParsed;
+              }
+            } catch (backendOcrErr) {
+              console.warn("Backend OCR notice:", backendOcrErr);
+            }
+          }
+
+          // If barcode was detected, also query live product catalogs (Open Food Facts / UPCitemdb)
+          let catalogProduct = null;
+          if (detectedBarcode) {
+            try {
+              const catRes = await resolveBarcodeProduct(detectedBarcode);
+              if (catRes && catRes.found && catRes.product) {
+                catalogProduct = catRes;
+              }
+            } catch {
+              // Ignore catalog lookup error
+            }
+          }
+
+          if (catalogProduct && catalogProduct.found) {
+            // Merge catalog data with real OCR findings
+            const mergedProduct = {
+              ...catalogProduct.product,
+              ...(parsedData?.product?.mrp ? { mrp: parsedData.product.mrp, mrp_declaration_text: parsedData.product.mrp_declaration_text } : {}),
+              ...(parsedData?.product?.net_quantity ? { net_quantity: parsedData.product.net_quantity } : {}),
+              ...(parsedData?.product?.manufacturing_date ? { manufacturing_date: parsedData.product.manufacturing_date } : {}),
+              ...(parsedData?.product?.expiry_date ? { expiry_date: parsedData.product.expiry_date } : {}),
+              ...(parsedData?.product?.batch_number ? { batch_number: parsedData.product.batch_number } : {}),
+            };
+            const decls = evaluateRule6Declarations(mergedProduct);
+            const presentCount = decls.filter((d) => d.status === "PRESENT").length;
+
+            setLiveDetectedProduct(mergedProduct);
+            setRuleDeclarations(decls);
+            setComplianceSummary({
+              total_fields: decls.length,
+              present_count: presentCount,
+              missing_count: decls.length - presentCount,
+              score: Math.round((presentCount / decls.length) * 100),
+            });
+            setLookupSource(`${catalogProduct.source} + Label OCR`);
+            setLookupError("");
+          } else if (parsedData && parsedData.found) {
+            setLiveDetectedProduct(parsedData.product);
+            setRuleDeclarations(parsedData.declarations);
+            setComplianceSummary(parsedData.compliance_summary);
+            setLookupSource("Label Optical Character Recognition (OCR)");
+            setLookupError("");
+          } else {
+            setLookupError("Label captured. Some declarations could not be read clearly. You can inspect or retake the photograph.");
+          }
+        } catch (ocrProcessErr) {
+          console.error("OCR Analysis error:", ocrProcessErr);
+          setLookupError("Label photograph frozen. Please verify statutory declarations on the pack.");
+        } finally {
+          setIsResolvingProduct(false);
+        }
       },
       "image/jpeg",
-      0.92
+      0.95
     );
   };
 
-  // Retake photo
-  const handleRetake = () => {
+  // Retake photograph & resume scanning
+  const handleRetake = async () => {
     setCapturedBlob(null);
     setCapturedPreview(null);
-    setOcrResult(null);
-    setRuleChecklist([]);
-    startCamera(facingMode);
+    setCapturedMetadata(null);
+    await startCamera(selectedDeviceId, facingMode);
   };
 
-  // Handle manual photo upload fallback
-  const handleFileUpload = (e) => {
+  // Download captured photograph
+  const handleDownloadPhotograph = () => {
+    if (!capturedPreview) return;
+    const a = document.createElement("a");
+    a.href = capturedPreview;
+    a.download = `packaging_inspection_${Date.now()}.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  // Handle manual photo file upload
+  const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
     const previewUrl = URL.createObjectURL(file);
     setCapturedBlob(file);
     setCapturedPreview(previewUrl);
-    stopCamera();
-    analyzeImageBlob(file, previewUrl);
+    setCapturedMetadata({
+      width: "File Upload",
+      height: "",
+      sizeKb: Math.round(file.size / 1024),
+      timestamp: new Date().toLocaleTimeString(),
+    });
+    await stopCamera();
+
+    // 1. Try decoding barcode from image using Html5Qrcode file scan or ZXing
+    try {
+      const tempScanner = new Html5Qrcode("html5-file-temp-container", false);
+      const decodedBarcode = await tempScanner.scanFile(file, false);
+      if (decodedBarcode) {
+        handleBarcodeDetected(decodedBarcode, "EAN-13");
+      }
+    } catch {
+      // If no barcode detected in image, try ZXing reader
+      try {
+        const zxing = new BrowserMultiFormatReader();
+        const img = new Image();
+        img.src = previewUrl;
+        await img.decode();
+        const res = await zxing.decodeFromImageElement(img);
+        if (res && res.getText()) {
+          handleBarcodeDetected(res.getText(), res.getBarcodeFormat()?.toString() || "EAN-13");
+        }
+      } catch {
+        // No barcode detected in uploaded photo
+      }
+    }
+
+    // 2. Perform OCR on uploaded file
+    try {
+      const ocrRes = await api.ocr.extract(file);
+      if (ocrRes?.extracted_fields) {
+        const fields = ocrRes.extracted_fields;
+        const normalized = {
+          product_name: fields.product_name || fields.generic_name || null,
+          brand: fields.brand || null,
+          mrp: fields.mrp ? parseFloat(fields.mrp) : null,
+          mrp_declaration_text: fields.mrp_declaration_text || null,
+          net_quantity: fields.net_quantity ? `${fields.net_quantity} ${fields.unit || ''}`.trim() : null,
+          manufacturer_name: fields.manufacturer_name || null,
+          manufacturer_address: fields.manufacturer_address || null,
+          country_of_origin: fields.country_of_origin || null,
+          manufacturing_date: fields.manufacturing_date || null,
+          expiry_date: fields.expiry_date || null,
+          consumer_care: fields.customer_care_phone || fields.customer_care_email || null,
+          unit_sale_price: fields.unit_sale_price || null,
+        };
+        const decls = evaluateRule6Declarations(normalized);
+        const presentCount = decls.filter((d) => d.status === "PRESENT").length;
+
+        setLiveDetectedProduct(normalized);
+        setRuleDeclarations(decls);
+        setComplianceSummary({
+          total_fields: decls.length,
+          present_count: presentCount,
+          missing_count: decls.length - presentCount,
+          score: Math.round((presentCount / decls.length) * 100),
+        });
+        setLookupSource("Optical Character Recognition (OCR)");
+        setLookupError("");
+      }
+    } catch (err) {
+      console.warn("File OCR extraction notice:", err);
+    }
   };
 
-  // Apply data back to parent page
+  // Apply scanned product data back to parent docket
   const handleApplyToForm = () => {
-    if (onApplyData && ocrResult?.extracted_fields) {
+    if (onApplyData) {
+      const payload = normalizedDeclarations || liveDetectedProduct || {};
       onApplyData({
-        ...ocrResult.extracted_fields,
+        ...payload,
         previewImage: capturedPreview,
-        rawOcrText: ocrResult.raw_text,
-        confidence: ocrResult.confidence,
+        barcode: liveBarcode?.code,
+        barcodeFormat: liveBarcode?.format,
+        gs1_country: liveBarcode?.gs1_country,
       });
     }
     onClose();
   };
 
-  // Download PDF inspection report
+  // Download official PDF report
   const handleDownloadReport = async () => {
     setIsDownloadingPdf(true);
     try {
-      const failedRules = ruleChecklist.filter((r) => r.status === "FAILED");
+      const activeData = liveDetectedProduct || {};
+      const failedDeclarations = ruleDeclarations.filter((r) => r.status === "MISSING");
       const insp = await api.inspections.create({
         product_id: 1,
-        store_name: "Field Camera Surveillance Audit",
-        location: "Mobile Inspection Unit - Directorate of Legal Metrology",
-        remarks: `Live camera package audit: ${failedRules.length > 0 ? failedRules.length + " violations detected" : "Fully compliant"}.`,
-        violations: failedRules.map((r) => ({
+        store_name: "Real-Time Barcode & Packaging Camera Inspection",
+        location: "Enforcement Wing - Directorate of Legal Metrology",
+        remarks: `Camera inspection: ${activeData.product_name || "Scanned Commodity"}. Barcode ${
+          liveBarcode?.code || "N/A"
+        }. ${failedDeclarations.length > 0 ? failedDeclarations.length + " statutory non-compliances flagged under Rule 6" : "All Rule 6 statutory declarations verified"}.`,
+        violations: failedDeclarations.map((r) => ({
           rule_code: r.rule.replace(/\s+/g, "-").toUpperCase(),
-          description: `${r.title}: ${r.detail}`,
+          description: `${r.field} (${r.rule}): ${r.legal_requirement}`,
           severity: r.severity || "HIGH",
           penalty_clause: "Section 36(1), Legal Metrology Act, 2009",
         })),
@@ -437,12 +622,41 @@ export default function CameraInspectionModal({ isOpen, onClose, onApplyData }) 
     }
   };
 
-  if (!isOpen) return null;
+  // Quick test barcode simulator
+  const handleSimulateBarcode = (code) => {
+    handleBarcodeDetected(code, code.length === 12 ? "UPC-A" : "EAN-13");
+  };
 
-  const totalChecks = ruleChecklist.length;
-  const passedChecks = ruleChecklist.filter((r) => r.status === "PASSED").length;
-  const failedChecks = totalChecks - passedChecks;
-  const isOverallCompliant = totalChecks > 0 && failedChecks === 0;
+  // Lifecycle when modal opens/closes
+  useEffect(() => {
+    if (isOpen) {
+      setCapturedBlob(null);
+      setCapturedPreview(null);
+      setCapturedMetadata(null);
+      setLiveBarcode(null);
+      setLiveDetectedProduct(null);
+      setRuleDeclarations([]);
+      setComplianceSummary(null);
+      setLookupSource("");
+      setLookupError("");
+      setCameraError("");
+      lastScannedCodeRef.current = "";
+
+      // Small delay to ensure scanContainerId is mounted in DOM
+      const timer = setTimeout(() => {
+        startCamera(selectedDeviceId, facingMode);
+      }, 150);
+
+      return () => {
+        clearTimeout(timer);
+        stopCamera();
+      };
+    } else {
+      stopCamera();
+    }
+  }, [isOpen, startCamera, stopCamera, selectedDeviceId, facingMode]);
+
+  if (!isOpen) return null;
 
   return (
     <div
@@ -452,129 +666,354 @@ export default function CameraInspectionModal({ isOpen, onClose, onApplyData }) 
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: "rgba(10, 25, 47, 0.88)",
-        backdropFilter: "blur(8px)",
+        backgroundColor: "rgba(10, 25, 47, 0.90)",
+        backdropFilter: "blur(10px)",
         zIndex: 9999,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        padding: "16px",
+        padding: "12px",
       }}
     >
+      {/* Hidden dummy container for file barcode fallback */}
+      <div id="html5-file-temp-container" style={{ display: "none" }}></div>
+
       <div
         style={{
           width: "100%",
-          maxWidth: "1150px",
-          maxHeight: "92vh",
+          maxWidth: "1320px",
+          maxHeight: "96vh",
           backgroundColor: "#FFFFFF",
-          borderRadius: "12px",
-          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.35)",
+          borderRadius: "14px",
+          boxShadow: "0 25px 60px -12px rgba(0, 0, 0, 0.55)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
           border: "1px solid rgba(255, 255, 255, 0.2)",
         }}
       >
-        {/* Header Bar */}
+        {/* Top Header Bar */}
         <div
           style={{
-            padding: "16px 24px",
+            padding: "12px 20px",
             backgroundColor: "var(--gov-navy, #0B2545)",
             color: "#FFFFFF",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+            borderBottom: "1px solid rgba(255, 255, 255, 0.12)",
+            flexWrap: "wrap",
+            gap: "10px",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <div
               style={{
-                width: "36px",
-                height: "36px",
-                borderRadius: "8px",
-                backgroundColor: "rgba(30, 144, 255, 0.2)",
-                border: "1px solid #1E90FF",
+                width: "40px",
+                height: "40px",
+                borderRadius: "10px",
+                backgroundColor: "rgba(56, 189, 248, 0.2)",
+                border: "1px solid #38BDF8",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Camera size={20} color="#60A5FA" />
+              <Scan size={22} color="#38BDF8" />
             </div>
             <div>
-              <div style={{ fontSize: "16px", fontWeight: 700, letterSpacing: "0.3px" }}>
-                Live Camera & Label Inspection Scanner
+              <div style={{ fontSize: "16px", fontWeight: 700, display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                <span>Real-Time Barcode & Packaging Scanner</span>
+                {isStreaming && (
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 700,
+                      backgroundColor: "#15803D",
+                      color: "#FFFFFF",
+                      padding: "2px 8px",
+                      borderRadius: "12px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: "6px",
+                        height: "6px",
+                        borderRadius: "50%",
+                        backgroundColor: "#86EFAC",
+                        animation: "pulseDot 1.4s infinite",
+                      }}
+                    />
+                    LIVE CAMERA STREAMING (EAN-13 / UPC-A)
+                  </span>
+                )}
+                {isResolvingProduct && (
+                  <span style={{ fontSize: "11px", color: "#38BDF8", display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                    <RefreshCw size={12} className="spin" /> Querying Product Databases...
+                  </span>
+                )}
               </div>
-              <div style={{ fontSize: "12px", color: "rgba(255, 255, 255, 0.7)" }}>
-                Legal Metrology (Packaged Commodities) Rules, 2011 — Principal Display Panel (PDP) Audit
+              <div style={{ fontSize: "12px", color: "rgba(255, 255, 255, 0.75)" }}>
+                Legal Metrology (Packaged Commodities) Rules, 2011 • Rule 6 Statutory Declaration Audit
               </div>
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            style={{
-              background: "transparent",
-              border: "none",
-              color: "#FFFFFF",
-              cursor: "pointer",
-              padding: "6px",
-              borderRadius: "6px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-            title="Close scanner"
-          >
-            <X size={22} />
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <button
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              style={{
+                background: soundEnabled ? "rgba(56, 189, 248, 0.2)" : "rgba(255,255,255,0.08)",
+                border: "1px solid rgba(255,255,255,0.2)",
+                color: "#FFFFFF",
+                cursor: "pointer",
+                padding: "6px 10px",
+                borderRadius: "6px",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                fontSize: "12px",
+              }}
+              title="Toggle scanner audio beep"
+            >
+              {soundEnabled ? <Volume2 size={15} color="#38BDF8" /> : <VolumeX size={15} color="#94A3B8" />}
+              <span>{soundEnabled ? "Beep On" : "Beep Mute"}</span>
+            </button>
+
+            <button
+              onClick={() => setShowDetailsPanel(!showDetailsPanel)}
+              style={{
+                background: showDetailsPanel ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.08)",
+                border: "1px solid rgba(255,255,255,0.2)",
+                color: "#FFFFFF",
+                cursor: "pointer",
+                padding: "6px 12px",
+                borderRadius: "6px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "12px",
+              }}
+            >
+              <Info size={14} /> Specs
+            </button>
+
+            <button
+              onClick={onClose}
+              style={{
+                background: "rgba(255,255,255,0.1)",
+                border: "none",
+                color: "#FFFFFF",
+                cursor: "pointer",
+                padding: "7px",
+                borderRadius: "6px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              title="Close scanner"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
-        {/* Modal Body */}
+        {/* Real-Time Camera Details Bar (HUD) */}
+        {showDetailsPanel && (
+          <div
+            style={{
+              padding: "8px 20px",
+              backgroundColor: "#0F172A",
+              color: "#E2E8F0",
+              borderBottom: "1px solid #1E293B",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: "12px",
+              fontSize: "12px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <Video size={14} color="#38BDF8" />
+                <span style={{ color: "#94A3B8" }}>Active Sensor:</span>
+                <strong>{cameraDetails.label}</strong>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={{ color: "#94A3B8" }}>Mode:</span>
+                <strong style={{ color: "#38BDF8" }}>
+                  {facingMode === "environment" ? "Mobile Rear Camera (Environment)" : "Front Camera / Webcam"}
+                </strong>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={{ color: "#94A3B8" }}>Engine:</span>
+                <strong style={{ color: "#34D399" }}>Html5Qrcode + ZXing Dual Engine</strong>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={{ color: "#94A3B8" }}>API Tiers:</span>
+                <strong style={{ color: "#FBBF24" }}>Open Food Facts v2 → UPCitemdb → Local DB</strong>
+              </div>
+            </div>
+
+            {availableDevices.length > 1 && (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <Settings size={13} color="#94A3B8" />
+                <select
+                  value={selectedDeviceId}
+                  onChange={handleDeviceChange}
+                  style={{
+                    backgroundColor: "#1E293B",
+                    color: "#FFFFFF",
+                    border: "1px solid #475569",
+                    padding: "3px 8px",
+                    borderRadius: "4px",
+                    fontSize: "11px",
+                  }}
+                >
+                  {availableDevices.map((dev, idx) => (
+                    <option key={dev.id || idx} value={dev.id}>
+                      {dev.label || `Camera ${idx + 1}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Modal Body - 2 Columns Layout: Viewfinder (Left) + Rule 6 Statutory Audit (Right) */}
         <div
           style={{
             flex: 1,
             overflowY: "auto",
             display: "grid",
-            gridTemplateColumns: capturedPreview ? "1.1fr 1fr" : "1fr",
-            gap: "20px",
-            padding: "20px",
-            backgroundColor: "#F8FAFC",
+            gridTemplateColumns: "1.1fr 1.25fr",
+            gap: "18px",
+            padding: "16px",
+            backgroundColor: "#F1F5F9",
           }}
         >
-          {/* Left Column: Live Camera Stream or Captured Frame */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+          {/* LEFT COLUMN: Camera Viewfinder & Controls */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             <div
               style={{
                 position: "relative",
                 width: "100%",
-                height: capturedPreview ? "380px" : "460px",
+                height: "440px",
                 backgroundColor: "#000000",
-                borderRadius: "10px",
+                borderRadius: "12px",
                 overflow: "hidden",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                boxShadow: "inset 0 0 20px rgba(0,0,0,0.8)",
+                boxShadow: "inset 0 0 30px rgba(0,0,0,0.85), 0 4px 15px rgba(0,0,0,0.2)",
               }}
             >
-              {/* LIVE VIDEO STREAM */}
+              {/* Shutter Flash Animation */}
+              {isFlashing && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: "#FFFFFF",
+                    zIndex: 60,
+                    animation: "shutterFlash 0.3s ease-out forwards",
+                  }}
+                />
+              )}
+
+              {/* HTML5-QRCODE LIVE SCANNER CONTAINER */}
+              <div
+                id={scanContainerId}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  display: !capturedPreview ? "block" : "none",
+                }}
+              />
+
+              {/* CAMERA INITIALIZING SPINNER */}
+              {!capturedPreview && isCameraLoading && (
+                <div
+                  style={{
+                    position: "absolute",
+                    zIndex: 25,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: "14px",
+                    color: "#FFFFFF",
+                  }}
+                >
+                  <RefreshCw size={36} className="spin" color="#38BDF8" />
+                  <div style={{ fontSize: "14px", fontWeight: 600 }}>Connecting to Camera Hardware...</div>
+                  <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.7)" }}>
+                    Initializing {facingMode === "environment" ? "Mobile Rear Camera" : "Webcam"}
+                  </div>
+                </div>
+              )}
+
+              {/* CAMERA PERMISSION REQUIRED / ERROR */}
+              {!capturedPreview && !isStreaming && !isCameraLoading && (
+                <div
+                  style={{
+                    position: "absolute",
+                    zIndex: 30,
+                    padding: "24px",
+                    textAlign: "center",
+                    color: "#FFFFFF",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: "12px",
+                    maxWidth: "460px",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "52px",
+                      height: "52px",
+                      borderRadius: "50%",
+                      backgroundColor: permissionState === "denied" ? "rgba(239, 68, 68, 0.2)" : "rgba(56, 189, 248, 0.2)",
+                      border: `2px solid ${permissionState === "denied" ? "#EF4444" : "#38BDF8"}`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {permissionState === "denied" ? <Lock size={26} color="#F87171" /> : <ShieldCheck size={26} color="#38BDF8" />}
+                  </div>
+
+                  <div style={{ fontSize: "16px", fontWeight: 700 }}>
+                    {permissionState === "denied" ? "Camera Permission Blocked" : "Live Camera Scanner"}
+                  </div>
+
+                  <div style={{ fontSize: "13px", color: "rgba(255, 255, 255, 0.8)", lineHeight: 1.5 }}>
+                    {cameraError || "Point camera at any packaged commodity barcode (EAN-13 / UPC-A) or Principal Display Panel."}
+                  </div>
+
+                  <div style={{ display: "flex", gap: "10px", marginTop: "6px" }}>
+                    <button
+                      onClick={() => startCamera(selectedDeviceId, facingMode)}
+                      className="btn btn-primary"
+                      style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 18px", fontWeight: 700 }}
+                    >
+                      <RotateCcw size={16} /> Allow Camera & Start
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* OVERLAY: RETICLE & REAL-TIME HUD (Rendered while streaming) */}
               {!capturedPreview && isStreaming && (
                 <>
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                    }}
-                  />
-
-                  {/* VIEWFINDER HUD OVERLAY */}
                   <div
                     style={{
                       position: "absolute",
@@ -587,162 +1026,115 @@ export default function CameraInspectionModal({ isOpen, onClose, onApplyData }) 
                       flexDirection: "column",
                       alignItems: "center",
                       justifyContent: "center",
+                      zIndex: 20,
                     }}
                   >
-                    {/* Bounding Guide Box (PDP Box) */}
+                    {/* Targeting Reticle Frame */}
                     <div
                       style={{
                         position: "relative",
                         width: "82%",
-                        height: "76%",
-                        border: "2px dashed rgba(96, 165, 250, 0.7)",
+                        height: "58%",
+                        border: "1px dashed rgba(56, 189, 248, 0.65)",
                         borderRadius: "8px",
-                        boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.35)",
+                        boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.40)",
                       }}
                     >
-                      {/* Corner Reticles */}
+                      {/* Laser Barcode Scan Line */}
                       <div
                         style={{
                           position: "absolute",
-                          top: -2,
-                          left: -2,
-                          width: "24px",
-                          height: "24px",
-                          borderTop: "4px solid #38BDF8",
-                          borderLeft: "4px solid #38BDF8",
-                        }}
-                      />
-                      <div
-                        style={{
-                          position: "absolute",
-                          top: -2,
-                          right: -2,
-                          width: "24px",
-                          height: "24px",
-                          borderTop: "4px solid #38BDF8",
-                          borderRight: "4px solid #38BDF8",
-                        }}
-                      />
-                      <div
-                        style={{
-                          position: "absolute",
-                          bottom: -2,
-                          left: -2,
-                          width: "24px",
-                          height: "24px",
-                          borderBottom: "4px solid #38BDF8",
-                          borderLeft: "4px solid #38BDF8",
-                        }}
-                      />
-                      <div
-                        style={{
-                          position: "absolute",
-                          bottom: -2,
-                          right: -2,
-                          width: "24px",
-                          height: "24px",
-                          borderBottom: "4px solid #38BDF8",
-                          borderRight: "4px solid #38BDF8",
-                        }}
-                      />
-
-                      {/* Animated Laser Scanning Line */}
-                      <div
-                        style={{
-                          position: "absolute",
-                          left: 0,
-                          right: 0,
+                          left: "2%",
+                          right: "2%",
                           height: "2px",
-                          background: "linear-gradient(90deg, transparent, #38BDF8, #60A5FA, transparent)",
-                          boxShadow: "0 0 12px #38BDF8",
-                          animation: "laserScan 2.5s ease-in-out infinite alternate",
+                          backgroundColor: "#38BDF8",
+                          boxShadow: "0 0 12px 3px rgba(56, 189, 248, 0.85)",
+                          animation: "laserScan 2.4s ease-in-out infinite alternate",
                         }}
                       />
 
-                      {/* Target Labels on Viewfinder */}
-                      <div
-                        style={{
-                          position: "absolute",
-                          top: "8px",
-                          left: "10px",
-                          fontSize: "11px",
-                          fontWeight: 600,
-                          color: "#93C5FD",
-                          textShadow: "0 1px 2px rgba(0,0,0,0.8)",
-                        }}
-                      >
-                        [PDP] Principal Display Panel
-                      </div>
-                      <div
-                        style={{
-                          position: "absolute",
-                          bottom: "8px",
-                          right: "10px",
-                          fontSize: "11px",
-                          fontWeight: 600,
-                          color: "#FCD34D",
-                          textShadow: "0 1px 2px rgba(0,0,0,0.8)",
-                        }}
-                      >
-                        Align MRP & Net Qty Area
-                      </div>
+                      {/* Reticle Corner Brackets */}
+                      <div style={{ position: "absolute", top: "-2px", left: "-2px", width: "18px", height: "18px", borderTop: "3px solid #38BDF8", borderLeft: "3px solid #38BDF8" }} />
+                      <div style={{ position: "absolute", top: "-2px", right: "-2px", width: "18px", height: "18px", borderTop: "3px solid #38BDF8", borderRight: "3px solid #38BDF8" }} />
+                      <div style={{ position: "absolute", bottom: "-2px", left: "-2px", width: "18px", height: "18px", borderBottom: "3px solid #38BDF8", borderLeft: "3px solid #38BDF8" }} />
+                      <div style={{ position: "absolute", bottom: "-2px", right: "-2px", width: "18px", height: "18px", borderBottom: "3px solid #38BDF8", borderRight: "3px solid #38BDF8" }} />
+
+                      {/* Live Barcode Pill Banner */}
+                      {liveBarcode && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            bottom: "-42px",
+                            left: "50%",
+                            transform: "translateX(-50%)",
+                            backgroundColor: "#0F172A",
+                            color: "#FFFFFF",
+                            padding: "6px 14px",
+                            borderRadius: "20px",
+                            fontSize: "12px",
+                            fontWeight: 700,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            border: "1px solid #38BDF8",
+                            boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          <Barcode size={16} color="#38BDF8" />
+                          <span>{liveBarcode.format}: {liveBarcode.code}</span>
+                          <span style={{ fontSize: "10px", backgroundColor: "#15803D", padding: "1px 6px", borderRadius: "4px" }}>
+                            {liveBarcode.gs1_country?.includes("India") ? "GS1 India 890" : "GS1"}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
-                    <div
-                      style={{
-                        position: "absolute",
-                        bottom: "12px",
-                        backgroundColor: "rgba(15, 23, 42, 0.8)",
-                        color: "#FFFFFF",
-                        padding: "4px 12px",
-                        borderRadius: "20px",
-                        fontSize: "11px",
-                        fontWeight: 600,
-                        letterSpacing: "0.3px",
-                        border: "1px solid rgba(255, 255, 255, 0.2)",
-                      }}
-                    >
-                      Keep packaging steady and well-illuminated
-                    </div>
+                    {!liveBarcode && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          bottom: "12px",
+                          backgroundColor: "rgba(15, 23, 42, 0.85)",
+                          color: "#E2E8F0",
+                          padding: "4px 14px",
+                          borderRadius: "20px",
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          border: "1px solid rgba(255, 255, 255, 0.2)",
+                        }}
+                      >
+                        Position Indian barcode or packaging label inside reticle • Auto-detects in real time
+                      </div>
+                    )}
                   </div>
 
-                  {/* Top-Right Quick Controls Overlay */}
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "12px",
-                      right: "12px",
-                      display: "flex",
-                      gap: "8px",
-                      zIndex: 10,
-                    }}
-                  >
-                    {hasMultipleCameras && (
-                      <button
-                        onClick={switchCameraFacing}
-                        style={{
-                          background: "rgba(15, 23, 42, 0.75)",
-                          border: "1px solid rgba(255, 255, 255, 0.3)",
-                          color: "#FFFFFF",
-                          borderRadius: "50%",
-                          width: "36px",
-                          height: "36px",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          cursor: "pointer",
-                        }}
-                        title="Switch Front / Rear Camera"
-                      >
-                        <SwitchCamera size={18} />
-                      </button>
-                    )}
+                  {/* Top-Right Quick Controls (Flip Camera / Torch) */}
+                  <div style={{ position: "absolute", top: "12px", right: "12px", display: "flex", gap: "8px", zIndex: 40 }}>
+                    <button
+                      onClick={switchCameraFacing}
+                      style={{
+                        background: "rgba(15, 23, 42, 0.85)",
+                        border: "1px solid rgba(255, 255, 255, 0.3)",
+                        color: "#FFFFFF",
+                        borderRadius: "50%",
+                        width: "36px",
+                        height: "36px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                      }}
+                      title={facingMode === "environment" ? "Switch to Front Camera / Webcam" : "Switch to Rear Camera"}
+                    >
+                      <SwitchCamera size={17} />
+                    </button>
 
                     {torchSupported && (
                       <button
                         onClick={toggleTorch}
                         style={{
-                          background: torchOn ? "#F59E0B" : "rgba(15, 23, 42, 0.75)",
+                          background: torchOn ? "#F59E0B" : "rgba(15, 23, 42, 0.85)",
                           border: "1px solid rgba(255, 255, 255, 0.3)",
                           color: "#FFFFFF",
                           borderRadius: "50%",
@@ -753,115 +1145,88 @@ export default function CameraInspectionModal({ isOpen, onClose, onApplyData }) 
                           justifyContent: "center",
                           cursor: "pointer",
                         }}
-                        title={torchOn ? "Turn Flash Off" : "Turn Flash On"}
+                        title={torchOn ? "Turn Flashlight Off" : "Turn Flashlight On"}
                       >
-                        {torchOn ? <ZapOff size={18} /> : <Zap size={18} />}
+                        {torchOn ? <ZapOff size={17} /> : <Zap size={17} />}
                       </button>
                     )}
                   </div>
                 </>
               )}
 
-              {/* CAPTURED FRAME PREVIEW */}
+              {/* FROZEN CAPTURED PHOTOGRAPH PREVIEW */}
               {capturedPreview && (
                 <div style={{ position: "relative", width: "100%", height: "100%" }}>
-                  <img
-                    src={capturedPreview}
-                    alt="Captured label frame"
-                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                  />
+                  <img src={capturedPreview} alt="Captured label" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
                   <div
                     style={{
                       position: "absolute",
-                      top: "10px",
-                      left: "10px",
-                      backgroundColor: "rgba(16, 185, 129, 0.9)",
+                      top: "12px",
+                      left: "12px",
+                      backgroundColor: "rgba(16, 185, 129, 0.95)",
                       color: "#FFFFFF",
-                      padding: "3px 10px",
-                      borderRadius: "12px",
+                      padding: "4px 12px",
+                      borderRadius: "14px",
                       fontSize: "11px",
                       fontWeight: 700,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
                     }}
                   >
-                    Snapshot Frozen
+                    <CheckCircle size={13} /> Photograph Frozen
                   </div>
-                </div>
-              )}
-
-              {/* CAMERA ERROR / FALLBACK SCREEN */}
-              {!capturedPreview && !isStreaming && (
-                <div
-                  style={{
-                    padding: "24px",
-                    textAlign: "center",
-                    color: "#FFFFFF",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: "12px",
-                  }}
-                >
-                  <AlertTriangle size={40} color="#FBBF24" />
-                  <div style={{ fontSize: "14px", fontWeight: 600 }}>
-                    {cameraError || "Camera feed is offline."}
-                  </div>
-                  <div style={{ fontSize: "12px", color: "rgba(255, 255, 255, 0.7)", maxWidth: "420px" }}>
-                    You can grant browser camera permissions and retry, or directly select an image of the packaging label from your files.
-                  </div>
-
-                  <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
-                    <button
-                      onClick={() => startCamera(facingMode)}
-                      className="btn btn-sm btn-primary"
-                      style={{ display: "flex", alignItems: "center", gap: "6px" }}
+                  {capturedMetadata && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        bottom: "12px",
+                        left: "12px",
+                        backgroundColor: "rgba(15, 23, 42, 0.85)",
+                        color: "#E2E8F0",
+                        padding: "3px 10px",
+                        borderRadius: "6px",
+                        fontSize: "11px",
+                      }}
                     >
-                      <RotateCcw size={14} /> Retry Camera
-                    </button>
-                    <label
-                      className="btn btn-sm btn-secondary"
-                      style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}
-                    >
-                      <Upload size={14} /> Select File
-                      <input type="file" accept="image/*" onChange={handleFileUpload} style={{ display: "none" }} />
-                    </label>
-                  </div>
+                      {capturedMetadata.width} × {capturedMetadata.height} • {capturedMetadata.sizeKb} KB
+                    </div>
+                  )}
                 </div>
               )}
             </div>
 
-            {/* Bottom Controls Bar */}
+            {/* Viewfinder Bottom Controls Bar */}
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                padding: "12px 16px",
+                padding: "10px 16px",
                 backgroundColor: "#FFFFFF",
-                borderRadius: "8px",
-                border: "1px solid var(--border-light, #E2E8F0)",
+                borderRadius: "10px",
+                border: "1px solid #CBD5E1",
               }}
             >
               {!capturedPreview ? (
                 <>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <label
-                      style={{
-                        cursor: "pointer",
-                        fontSize: "12px",
-                        color: "var(--gov-blue, #1E90FF)",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "5px",
-                        fontWeight: 600,
-                      }}
-                    >
-                      <Upload size={14} /> Upload image instead
-                      <input type="file" accept="image/*" onChange={handleFileUpload} style={{ display: "none" }} />
-                    </label>
-                  </div>
+                  <label
+                    style={{
+                      cursor: "pointer",
+                      fontSize: "12px",
+                      color: "var(--gov-blue, #1E90FF)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      fontWeight: 600,
+                    }}
+                  >
+                    <Upload size={15} /> Upload Photo
+                    <input type="file" accept="image/*" onChange={handleFileUpload} style={{ display: "none" }} />
+                  </label>
 
                   <button
-                    onClick={captureFrame}
+                    onClick={capturePhotograph}
                     disabled={!isStreaming}
                     className="btn btn-primary"
                     style={{
@@ -869,12 +1234,15 @@ export default function CameraInspectionModal({ isOpen, onClose, onApplyData }) 
                       alignItems: "center",
                       gap: "8px",
                       padding: "10px 24px",
+                      fontSize: "13px",
                       fontWeight: 700,
-                      boxShadow: "0 4px 12px rgba(30, 144, 255, 0.35)",
-                      opacity: isStreaming ? 1 : 0.6,
+                      borderRadius: "24px",
+                      boxShadow: isStreaming ? "0 4px 14px rgba(30, 144, 255, 0.4)" : "none",
+                      opacity: isStreaming ? 1 : 0.5,
+                      cursor: isStreaming ? "pointer" : "not-allowed",
                     }}
                   >
-                    <Camera size={18} /> Capture & Inspect
+                    <Camera size={16} /> Capture Snapshot
                   </button>
                 </>
               ) : (
@@ -884,249 +1252,427 @@ export default function CameraInspectionModal({ isOpen, onClose, onApplyData }) 
                     className="btn btn-secondary btn-sm"
                     style={{ display: "flex", alignItems: "center", gap: "6px" }}
                   >
-                    <RotateCcw size={14} /> Retake Photo
+                    <RotateCcw size={14} /> Resume Live Scanning
                   </button>
 
                   <div style={{ display: "flex", gap: "8px" }}>
                     <button
-                      onClick={handleDownloadReport}
-                      disabled={isDownloadingPdf || !ocrResult}
+                      onClick={handleDownloadPhotograph}
                       className="btn btn-secondary btn-sm"
                       style={{ display: "flex", alignItems: "center", gap: "6px" }}
                     >
-                      <Download size={14} />
-                      {isDownloadingPdf ? "Creating..." : "Download Notice (PDF)"}
+                      <ImageIcon size={14} /> Save (.jpg)
                     </button>
                     <button
-                      onClick={handleApplyToForm}
-                      disabled={!ocrResult}
-                      className="btn btn-primary btn-sm"
+                      onClick={handleDownloadReport}
+                      disabled={isDownloadingPdf}
+                      className="btn btn-secondary btn-sm"
                       style={{ display: "flex", alignItems: "center", gap: "6px" }}
                     >
-                      Apply to Form <ArrowRight size={14} />
+                      <Download size={14} /> {isDownloadingPdf ? "Creating..." : "PDF Notice"}
                     </button>
                   </div>
                 </>
               )}
             </div>
 
-            {/* Quick Demo Pre-load triggers for rapid evaluation */}
-            {!capturedPreview && (
-              <div
-                style={{
-                  padding: "10px 14px",
-                  backgroundColor: "#EFF6FF",
-                  borderRadius: "6px",
-                  border: "1px solid #BFDBFE",
-                  fontSize: "12px",
-                  color: "#1E40AF",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <Sparkles size={15} color="#2563EB" />
-                  <span>
-                    <strong>Quick Test:</strong> No physical package? Test simulated camera package:
-                  </span>
-                </div>
-                <div style={{ display: "flex", gap: "6px" }}>
-                  <button
-                    onClick={async () => {
-                      const dummyBlob = new Blob(["sample"], { type: "image/jpeg" });
-                      setCapturedBlob(dummyBlob);
-                      setCapturedPreview("/assets/samples/sample-atta.svg");
-                      stopCamera();
-                      analyzeImageBlob(dummyBlob, "/assets/samples/sample-atta.svg");
-                    }}
-                    className="btn btn-sm"
-                    style={{ fontSize: "11px", padding: "3px 8px", backgroundColor: "#DBEAFE", border: "1px solid #93C5FD" }}
-                  >
-                    Simulate Basmati Rice
-                  </button>
-                  <button
-                    onClick={async () => {
-                      const dummyBlob = new Blob(["detergent"], { type: "image/jpeg" });
-                      setCapturedBlob(dummyBlob);
-                      setCapturedPreview("/assets/samples/sample-detergent.svg");
-                      stopCamera();
-                      analyzeImageBlob(dummyBlob, "/assets/samples/sample-detergent.svg");
-                    }}
-                    className="btn btn-sm"
-                    style={{ fontSize: "11px", padding: "3px 8px", backgroundColor: "#FEE2E2", border: "1px solid #FCA5A5", color: "#991B1B" }}
-                  >
-                    Simulate Violation Pack
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Right Column: Live OCR & Statutory Rule 6 Audit Results */}
-          {capturedPreview && (
+            {/* Scanner Guidance Footer */}
             <div
               style={{
-                backgroundColor: "#FFFFFF",
-                borderRadius: "10px",
-                border: "1px solid var(--border-light, #E2E8F0)",
+                padding: "8px 12px",
+                backgroundColor: "#F8FAFC",
+                borderRadius: "8px",
+                border: "1px solid #E2E8F0",
+                fontSize: "11px",
+                color: "#64748B",
                 display: "flex",
-                flexDirection: "column",
-                overflow: "hidden",
+                alignItems: "center",
+                gap: "6px",
               }}
             >
-              {/* Header */}
-              <div
-                style={{
-                  padding: "14px 18px",
-                  borderBottom: "1px solid var(--border-light, #E2E8F0)",
-                  backgroundColor: isOverallCompliant ? "#F0FDF4" : "#FEF2F2",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary, #0F172A)" }}>
-                    Rule 6 Statutory Audit Report
-                  </div>
-                  <div style={{ fontSize: "12px", color: "var(--text-secondary, #475569)" }}>
-                    OCR Engine Confidence: <strong>{ocrResult ? `${ocrResult.confidence}%` : "Processing..."}</strong>
-                  </div>
-                </div>
+              <Info size={14} color="#3B82F6" />
+              <span>Align barcode or packaging label within frame. Tap <strong>Capture Label &amp; Verify with OCR</strong> for full AI declaration extraction.</span>
+            </div>
+          </div>
 
-                {isAnalyzing ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "var(--gov-blue)" }}>
-                    <RefreshCw size={14} className="spin" />
-                    <span>Analyzing Frame...</span>
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "5px",
-                      padding: "4px 10px",
-                      borderRadius: "16px",
-                      fontSize: "12px",
-                      fontWeight: 700,
-                      backgroundColor: isOverallCompliant ? "#DCFCE7" : "#FEE2E2",
-                      color: isOverallCompliant ? "#166534" : "#991B1B",
-                    }}
-                  >
-                    {isOverallCompliant ? <CheckCircle size={14} /> : <AlertTriangle size={14} />}
-                    <span>{isOverallCompliant ? "100% COMPLIANT" : `${failedChecks} VIOLATION${failedChecks > 1 ? "S" : ""}`}</span>
-                  </div>
-                )}
+          {/* RIGHT COLUMN: Real-Time Live Intelligence & Legal Metrology Rule 6 Audit */}
+          <div
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderRadius: "12px",
+              border: "1px solid #CBD5E1",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+            }}
+          >
+            {/* Header with Live Status & Intelligence Source */}
+            <div
+              style={{
+                padding: "12px 16px",
+                borderBottom: "1px solid #E2E8F0",
+                backgroundColor: liveDetectedProduct
+                  ? "#F0FDF4"
+                  : lookupError
+                  ? "#FEF2F2"
+                  : "#F8FAFC",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "10px",
+              }}
+            >
+              <div>
+                <div style={{ fontSize: "14px", fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <Activity size={16} color="#0284C7" />
+                  <span>Rule 6 Statutory Declarations Audit</span>
+                </div>
+                <div style={{ fontSize: "11px", color: "#64748B" }}>
+                  {liveDetectedProduct
+                    ? `${liveDetectedProduct.product_name || "Product"} • ${lookupSource || "Resolved"}`
+                    : lookupError
+                    ? "Statutory Database Search Notice"
+                    : "Point camera at packaging barcode or label declarations"}
+                </div>
               </div>
 
-              {/* Extracted Product Summary Card */}
-              {ocrResult?.extracted_fields && (
+              {liveDetectedProduct ? (
                 <div
                   style={{
-                    padding: "12px 18px",
-                    backgroundColor: "#F8FAFC",
-                    borderBottom: "1px solid #E2E8F0",
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "8px",
-                    fontSize: "12px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "4px 10px",
+                    borderRadius: "14px",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    backgroundColor: "#DCFCE7",
+                    color: "#166534",
                   }}
                 >
-                  <div>
-                    <span style={{ color: "var(--text-muted)", display: "block" }}>Identified Commodity:</span>
-                    <strong>{ocrResult.extracted_fields.product_name || "Packaged Commodity"}</strong>
+                  <CheckCircle size={13} color="#16A34A" />
+                  <span>{complianceSummary ? `${complianceSummary.present_count}/9 PRESENT (${complianceSummary.score}%)` : "DETAILS FETCHED"}</span>
+                </div>
+              ) : isResolvingProduct ? (
+                <div style={{ fontSize: "11px", color: "#0284C7", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <RefreshCw size={12} className="spin" />
+                  <span>Querying APIs...</span>
+                </div>
+              ) : null}
+            </div>
+
+            {/* Content Body: Barcode Details + 9 Rule 6 Mandatory Declarations */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "14px", display: "flex", flexDirection: "column", gap: "12px" }}>
+              {/* Detected Barcode Card */}
+              {liveBarcode && (
+                <div
+                  style={{
+                    padding: "10px 14px",
+                    backgroundColor: "#F0FDF4",
+                    borderRadius: "8px",
+                    border: "1px solid #BBF7D0",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    gap: "8px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <div
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "6px",
+                        backgroundColor: "#DCFCE7",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Barcode size={18} color="#166534" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "11px", color: "#166534", fontWeight: 600 }}>
+                        Scanned {liveBarcode.format}:
+                      </div>
+                      <strong style={{ fontSize: "14px", color: "#0F172A", letterSpacing: "1px" }}>
+                        {liveBarcode.code}
+                      </strong>
+                    </div>
                   </div>
-                  <div>
-                    <span style={{ color: "var(--text-muted)", display: "block" }}>Declared MRP:</span>
-                    <strong>₹ {ocrResult.extracted_fields.mrp || "N/A"}</strong>
-                  </div>
-                  <div>
-                    <span style={{ color: "var(--text-muted)", display: "block" }}>Net Quantity:</span>
-                    <strong>
-                      {ocrResult.extracted_fields.net_quantity ? `${ocrResult.extracted_fields.net_quantity} ${ocrResult.extracted_fields.unit}` : "N/A"}
-                    </strong>
-                  </div>
-                  <div>
-                    <span style={{ color: "var(--text-muted)", display: "block" }}>Mfg / Pkg Date:</span>
-                    <strong>{ocrResult.extracted_fields.manufacturing_date || "N/A"}</strong>
+                  <div style={{ textAlign: "right" }}>
+                    <span style={{ fontSize: "11px", backgroundColor: "#DCFCE7", color: "#166534", padding: "2px 8px", borderRadius: "10px", fontWeight: 700 }}>
+                      {liveBarcode.gs1_country}
+                    </span>
+                    <div style={{ fontSize: "10px", color: "#64748B", marginTop: "2px" }}>{liveBarcode.timestamp}</div>
                   </div>
                 </div>
               )}
 
-              {/* Rule 6 Checklist Items */}
-              <div style={{ flex: 1, overflowY: "auto", padding: "12px 18px", display: "flex", flexDirection: "column", gap: "10px" }}>
-                {isAnalyzing && (
-                  <div style={{ padding: "40px 0", textAlign: "center", color: "var(--text-muted)" }}>
-                    <RefreshCw size={28} className="spin" style={{ margin: "0 auto 10px", color: "var(--gov-blue)" }} />
-                    <div>Performing optical character recognition...</div>
-                    <div style={{ fontSize: "11px", marginTop: "4px" }}>Validating Legal Metrology mandatory declarations</div>
+              {/* API Resolving Spinner */}
+              {isResolvingProduct && (
+                <div
+                  style={{
+                    padding: "24px",
+                    textAlign: "center",
+                    backgroundColor: "#F8FAFC",
+                    borderRadius: "8px",
+                    border: "1px dashed #CBD5E1",
+                  }}
+                >
+                  <RefreshCw size={24} className="spin" color="#0284C7" style={{ margin: "0 auto 8px" }} />
+                  <div style={{ fontSize: "13px", fontWeight: 600, color: "#1E293B" }}>
+                    Querying Open Food Facts v2 & UPCitemdb APIs...
                   </div>
-                )}
+                  <div style={{ fontSize: "11px", color: "#64748B", marginTop: "4px" }}>
+                    Checking global product catalog and Legal Metrology Rule 6 statutory databases
+                  </div>
+                </div>
+              )}
 
-                {!isAnalyzing && ruleChecklist.map((item, idx) => {
-                  const isPassed = item.status === "PASSED";
-                  return (
-                    <div
-                      key={idx}
-                      style={{
-                        padding: "10px 12px",
-                        borderRadius: "6px",
-                        border: `1px solid ${isPassed ? "#BBF7D0" : "#FECACA"}`,
-                        backgroundColor: isPassed ? "#F0FDF4" : "#FEF2F2",
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: "10px",
-                      }}
+              {/* Graceful Not Found Error State */}
+              {!isResolvingProduct && lookupError && (
+                <div
+                  style={{
+                    padding: "16px",
+                    backgroundColor: "#FEF2F2",
+                    borderRadius: "8px",
+                    border: "1px solid #FECACA",
+                    color: "#991B1B",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 700, fontSize: "13px" }}>
+                    <AlertTriangle size={18} color="#DC2626" />
+                    <span>Statutory Inspection Advisory</span>
+                  </div>
+                  <div style={{ fontSize: "12px", lineHeight: 1.5, color: "#7F1D1D" }}>
+                    <strong>{lookupError}</strong>
+                  </div>
+                  <div style={{ fontSize: "11px", color: "#991B1B" }}>
+                    The scanned barcode is not listed in registered commercial catalogs. As per Section 18 of the Legal Metrology Act, 2009, physical declarations on the Principal Display Panel (PDP) must be verified directly.
+                  </div>
+                  <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                    <button
+                      onClick={capturePhotograph}
+                      className="btn btn-primary btn-sm"
+                      style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 600, fontSize: "11px" }}
                     >
-                      <div style={{ marginTop: "2px" }}>
-                        {isPassed ? (
-                          <CheckCircle size={16} color="#16A34A" />
-                        ) : (
-                          <XCircle size={16} color="#DC2626" />
-                        )}
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "2px" }}>
-                          <span style={{ fontSize: "12px", fontWeight: 700, color: isPassed ? "#166534" : "#991B1B" }}>
-                            {item.rule}: {item.title}
-                          </span>
-                          {!isPassed && (
-                            <span
+                      <Camera size={13} /> Capture Label & Verify with OCR
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 9 MANDATORY LEGAL METROLOGY (RULE 6) STATUTORY DECLARATIONS */}
+              {!isResolvingProduct && liveDetectedProduct && ruleDeclarations.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {/* Summary Bar */}
+                  <div
+                    style={{
+                      padding: "8px 12px",
+                      backgroundColor: complianceSummary?.missing_count === 0 ? "#F0FDF4" : "#FFFBEB",
+                      border: `1px solid ${complianceSummary?.missing_count === 0 ? "#BBF7D0" : "#FDE68A"}`,
+                      borderRadius: "6px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      fontSize: "12px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <Layers size={14} color={complianceSummary?.missing_count === 0 ? "#16A34A" : "#D97706"} />
+                      <strong>Rule 6 Mandatory Declarations:</strong>
+                    </div>
+                    <div>
+                      <span
+                        style={{
+                          fontWeight: 700,
+                          color: complianceSummary?.missing_count === 0 ? "#15803D" : "#B45309",
+                        }}
+                      >
+                        {complianceSummary?.present_count} / {complianceSummary?.total_fields} Present
+                      </span>
+                      {complianceSummary?.missing_count > 0 && (
+                        <span style={{ color: "#DC2626", fontWeight: 600, marginLeft: "6px" }}>
+                          ({complianceSummary.missing_count} Missing)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 9 Statutory Fields Card List */}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                    }}
+                  >
+                    {ruleDeclarations.map((decl) => {
+                      const isPres = decl.status === "PRESENT";
+                      const isPart = decl.status === "PARTIAL";
+                      return (
+                        <div
+                          key={decl.id}
+                          style={{
+                            padding: "9px 12px",
+                            backgroundColor: isPres ? "#FFFFFF" : isPart ? "#FFFBEB" : "#FEF2F2",
+                            border: `1px solid ${isPres ? "#E2E8F0" : isPart ? "#FDE68A" : "#FECACA"}`,
+                            borderRadius: "8px",
+                            display: "flex",
+                            alignItems: "flex-start",
+                            justifyContent: "space-between",
+                            gap: "10px",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
+                              <span style={{ fontSize: "12px", fontWeight: 700, color: "#0F172A" }}>
+                                {decl.field}
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: "10px",
+                                  padding: "1px 6px",
+                                  borderRadius: "4px",
+                                  backgroundColor: "#F1F5F9",
+                                  color: "#475569",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {decl.rule}
+                              </span>
+                            </div>
+
+                            <div
                               style={{
-                                fontSize: "10px",
-                                fontWeight: 700,
-                                backgroundColor: "#DC2626",
-                                color: "#FFFFFF",
-                                padding: "1px 6px",
-                                borderRadius: "4px",
+                                fontSize: "12px",
+                                color: isPres ? "#1E293B" : isPart ? "#92400E" : "#991B1B",
+                                fontWeight: isPres ? 600 : 500,
                               }}
                             >
-                              {item.severity}
+                              {decl.value}
+                            </div>
+
+                            <div style={{ fontSize: "10px", color: "#64748B", marginTop: "2px" }}>
+                              {decl.legal_requirement}
+                            </div>
+                          </div>
+
+                          {/* Compliance Status Badge */}
+                          <div style={{ flexShrink: 0, textAlign: "right" }}>
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                fontSize: "11px",
+                                fontWeight: 700,
+                                padding: "3px 8px",
+                                borderRadius: "6px",
+                                backgroundColor: isPres ? "#DCFCE7" : isPart ? "#FEF3C7" : "#FEE2E2",
+                                color: isPres ? "#166534" : isPart ? "#92400E" : "#991B1B",
+                                border: `1px solid ${isPres ? "#86EFAC" : isPart ? "#FCD34D" : "#FCA5A5"}`,
+                              }}
+                            >
+                              {decl.icon}
                             </span>
-                          )}
+                          </div>
                         </div>
-                        <div style={{ fontSize: "11px", color: isPassed ? "#15803D" : "#B91C1C", lineHeight: 1.4 }}>
-                          {item.detail}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Waiting for Camera / Barcode Empty State */}
+              {!isResolvingProduct && !liveDetectedProduct && !lookupError && (
+                <div
+                  style={{
+                    padding: "40px 16px",
+                    textAlign: "center",
+                    color: "#94A3B8",
+                    border: "2px dashed #E2E8F0",
+                    borderRadius: "8px",
+                  }}
+                >
+                  <Tag size={32} style={{ margin: "0 auto 8px", color: "#94A3B8" }} />
+                  <div style={{ fontSize: "13px", fontWeight: 600, color: "#475569" }}>
+                    Ready for Real-Time Inspection
+                  </div>
+                  <div style={{ fontSize: "11px", marginTop: "4px", maxWidth: "340px", margin: "4px auto 0" }}>
+                    Point camera at any packaged commodity barcode (EAN-13 / UPC-A). Product data and Rule 6 compliance will be evaluated automatically.
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+
+            {/* Bottom Action Footer for Scanned Details */}
+            {liveDetectedProduct && (
+              <div
+                style={{
+                  padding: "10px 16px",
+                  borderTop: "1px solid #E2E8F0",
+                  backgroundColor: "#F8FAFC",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <button
+                  onClick={handleDownloadReport}
+                  disabled={isDownloadingPdf}
+                  className="btn btn-secondary btn-sm"
+                  style={{ display: "flex", alignItems: "center", gap: "6px" }}
+                >
+                  <Download size={14} /> Official PDF
+                </button>
+
+                <button
+                  onClick={handleApplyToForm}
+                  className="btn btn-primary btn-sm"
+                  style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 700 }}
+                >
+                  Apply to Docket <ArrowRight size={14} />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Embedded CSS for Laser Scan animation */}
+      {/* Embedded CSS Keyframes */}
       <style>{`
         @keyframes laserScan {
           0% {
-            top: 5%;
+            top: 6%;
           }
           100% {
             top: 92%;
+          }
+        }
+        @keyframes pulseDot {
+          0%, 100% {
+            opacity: 1;
+            transform: scale(1);
+          }
+          50% {
+            opacity: 0.35;
+            transform: scale(0.85);
+          }
+        }
+        @keyframes shutterFlash {
+          0% {
+            opacity: 0.9;
+          }
+          100% {
+            opacity: 0;
           }
         }
         .spin {

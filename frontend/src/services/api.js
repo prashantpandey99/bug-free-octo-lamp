@@ -1,4 +1,4 @@
-const API_BASE = "/api";
+const API_BASE = (import.meta.env?.VITE_API_BASE_URL || "/api").replace(/\/+$/, "");
 
 function getAuthHeaders(isMultipart = false) {
   const token = localStorage.getItem("token");
@@ -17,22 +17,57 @@ async function request(endpoint, options = {}) {
   const isMultipart = options.body instanceof FormData;
   const headers = { ...getAuthHeaders(isMultipart), ...(options.headers || {}) };
 
+  let response;
   try {
-    const response = await fetch(url, { ...options, headers });
-    
-    if (response.status === 204) {
-      return null;
-    }
-
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.detail || `Request failed with status ${response.status}`);
-    }
-    return data;
+    response = await fetch(url, { ...options, headers });
   } catch (error) {
-    console.error(`API Error on [${options.method || "GET"}] ${endpoint}:`, error);
-    throw error;
+    console.error(`API Connection Failed on [${options.method || "GET"}] ${url}:`, error);
+    throw new Error(
+      `Unable to connect to backend server at ${url}. Please ensure the FastAPI backend is running on port 8000.`
+    );
   }
+
+  if (response.status === 204) {
+    return null;
+  }
+
+  let data;
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+  } else {
+    const text = await response.text().catch(() => "");
+    data = { detail: text || `HTTP ${response.status} ${response.statusText}` };
+  }
+
+  if (!response.ok) {
+    let errorMsg = `Request failed with status ${response.status}`;
+    if (data?.detail) {
+      if (typeof data.detail === "string") {
+        errorMsg = data.detail;
+      } else if (Array.isArray(data.detail)) {
+        errorMsg = data.detail
+          .map((d) => {
+            if (typeof d === "string") return d;
+            const loc = Array.isArray(d.loc) ? d.loc.filter((p) => p !== "body").join(".") : "";
+            return loc ? `${loc}: ${d.msg || JSON.stringify(d)}` : (d.msg || JSON.stringify(d));
+          })
+          .join("; ");
+      } else if (typeof data.detail === "object") {
+        errorMsg = JSON.stringify(data.detail);
+      }
+    }
+    const err = new Error(errorMsg);
+    err.status = response.status;
+    err.data = data;
+    throw err;
+  }
+
+  return data;
 }
 
 export const api = {
@@ -49,10 +84,50 @@ export const api = {
         body: JSON.stringify(userData),
       }),
     getMe: () => request("/auth/me"),
-    forgotPassword: (email) =>
-      request("/auth/forgot-password", {
+    sendOtp: (email) =>
+      request("/auth/send-otp", {
         method: "POST",
         body: JSON.stringify({ email }),
+      }),
+    requestOtp: (email) =>
+      request("/auth/request-otp", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      }),
+    verifyOtp: (email, otp, requestId = null) =>
+      request("/auth/verify-otp", {
+        method: "POST",
+        body: JSON.stringify(requestId ? { email, otp, request_id: requestId } : { email, otp }),
+      }),
+    verifyOtpUnified: (email, otp, requestId) =>
+      request("/auth/verify-otp", {
+        method: "POST",
+        body: JSON.stringify({ email, otp, request_id: requestId }),
+      }),
+    refreshToken: (refreshToken) =>
+      request("/auth/refresh-token", {
+        method: "POST",
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      }),
+    forgotPassword: (email) =>
+      request("/auth/forgot-password/send-otp", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      }),
+    sendPasswordResetOtp: (email) =>
+      request("/auth/forgot-password/send-otp", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      }),
+    verifyPasswordResetOtp: (email, otp) =>
+      request("/auth/forgot-password/verify-otp", {
+        method: "POST",
+        body: JSON.stringify({ email, otp }),
+      }),
+    resetPassword: (payload) =>
+      request("/auth/forgot-password/reset", {
+        method: "POST",
+        body: JSON.stringify(payload),
       }),
   },
 
@@ -93,7 +168,7 @@ export const api = {
     categories: () => request("/products/categories"),
   },
 
-  // OCR Extraction
+  // OCR & Real-Time Barcode Extraction
   ocr: {
     extract: (file) => {
       const formData = new FormData();
@@ -103,6 +178,32 @@ export const api = {
         body: formData,
       });
     },
+    extractMulti: (files) => {
+      const formData = new FormData();
+      for (const file of files) {
+        formData.append("files", file);
+      }
+      return request("/ocr/extract-multi", {
+        method: "POST",
+        body: formData,
+      });
+    },
+    extractBatch: (files) => {
+      const formData = new FormData();
+      for (const file of files) {
+        formData.append("files", file);
+      }
+      return request("/ocr/extract-batch", {
+        method: "POST",
+        body: formData,
+      });
+    },
+    lookupBarcode: (code) => request(`/ocr/barcode/${encodeURIComponent(code)}`),
+    realtimeScan: (data) =>
+      request("/ocr/realtime-scan", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
   },
 
   // Compliance Rule Engine
@@ -114,6 +215,13 @@ export const api = {
       }),
     get: (id) => request(`/compliance/${id}`),
     getByProduct: (productId) => request(`/compliance/product/${productId}`),
+    issueCompanyNotice: (data) =>
+      request("/compliance/issue-company-notice", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    getNoticeDownloadUrl: (noticeId) =>
+      `${API_BASE}/compliance/notice/${encodeURIComponent(noticeId)}/download`,
   },
 
   // Rules Configuration
@@ -190,10 +298,33 @@ export const api = {
       }),
   },
 
+  // Grievances (Officer Portal)
+  grievances: {
+    list: (status) =>
+      request(status ? `/grievances?status_filter=${status}` : "/grievances"),
+    get: (docketId) =>
+      request(`/grievances/${encodeURIComponent(docketId)}`),
+    update: (docketId, data) =>
+      request(`/grievances/${encodeURIComponent(docketId)}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+    issueNotice: (docketId, data) =>
+      request(`/grievances/${encodeURIComponent(docketId)}/issue-notice`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    getNoticeDownloadUrl: (noticeId) => `${API_BASE}/grievances/notice/${encodeURIComponent(noticeId)}/download`,
+  },
+
   // Dashboard & Analytics
   dashboard: {
     stats: () => request("/dashboard/stats"),
+    activity: (limit = 20) => request(`/dashboard/activity?limit=${limit}`),
   },
+
+  // Health & Connectivity Check
+  health: () => request("/health"),
 
   // System Audit
   audit: {

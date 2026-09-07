@@ -19,13 +19,19 @@ def test_ocr_service_extraction():
         assert fields["mrp"] is not None
 
 def test_inspection_and_pdf_report_workflow():
-    # 1. Login as Inspector
-    login_resp = client.post("/api/auth/login", json={
-        "email": "inspector@doca.gov.in",
-        "password": "Inspector@123"
+    # 1. Register a real Inspector account
+    import time
+    insp_email = f"officer.test.{int(time.time()*1000)}@doca.gov.in"
+    reg_resp = client.post("/api/auth/register", json={
+        "name": "Insp. Officer Test",
+        "email": insp_email,
+        "password": "SecurePassword@123",
+        "confirm_password": "SecurePassword@123",
+        "role": "Inspector",
+        "organization": "Central Enforcement Wing"
     })
-    assert login_resp.status_code == 200
-    token = login_resp.json()["access_token"]
+    assert reg_resp.status_code == 200
+    token = reg_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
     # 2. Register an Inspection

@@ -1,0 +1,23 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/backend"
+  ],
+  "python.autoComplete.extraPaths": [
+    "${workspaceFolder}/backend"
+  ],
+  "python.analysis.typeCheckingMode": "off",
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportGeneralTypeIssues": "none",
+    "reportArgumentType": "none",
+    "reportAttributeAccessIssue": "none",
+    "reportCallIssue": "none",
+    "reportOptionalMemberAccess": "none",
+    "reportMissingImports": "none"
+  },
+  "python.pyrefly.typeCheckingMode": "off",
+  "python.pyrefly.searchPaths": [
+    "${workspaceFolder}/backend"
+  ],
+  "pyrefly.typeCheckingMode": "off"
+}

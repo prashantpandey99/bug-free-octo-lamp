@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Any
 from sqlalchemy.orm import Session
 from app.models.audit_log import AuditLog
 from app.models.user import User
@@ -7,7 +7,7 @@ def log_audit_event(
     db: Session,
     action: str,
     entity: str,
-    entity_id: Optional[str] = None,
+    entity_id: Optional[Any] = None,
     user: Optional[User] = None,
     ip_address: Optional[str] = None,
     details: Optional[str] = None

@@ -18,64 +18,14 @@ def seed_database(db: Session = None):
         close_at_end = True
 
     try:
-        # Check if already seeded
-        if db.query(User).count() > 0:
-            print("Database already seeded with demo data.")
+        # Check if rules already seeded
+        if db.query(ComplianceRule).count() > 0:
+            print("Database already initialized with statutory rules.")
             return
 
-        print("Seeding database with statutory Legal Metrology rules, demo users, and realistic products...")
+        print("Seeding database with statutory Legal Metrology rules and categories...")
 
-        # 1. Seed Users for All 5 Roles
-        admin_user = User(
-            name="Dr. Alok Srivastava",
-            email="admin@doca.gov.in",
-            password_hash=get_password_hash("Admin@123"),
-            role="Admin",
-            phone="011-23384501",
-            organization="Directorate of Legal Metrology, Krishi Bhawan, New Delhi",
-            status="ACTIVE"
-        )
-        inspector_user = User(
-            name="Insp. Rajesh Verma",
-            email="inspector@doca.gov.in",
-            password_hash=get_password_hash("Inspector@123"),
-            role="Inspector",
-            phone="9810234567",
-            organization="Central Legal Metrology Enforcement Wing, Zone 1",
-            status="ACTIVE"
-        )
-        mfg_user = User(
-            name="Shakti Bhog Foods Ltd.",
-            email="mfg@shaktibhog.com",
-            password_hash=get_password_hash("Mfg@123"),
-            role="Manufacturer",
-            phone="011-47000000",
-            organization="Shakti Bhog Agro Industries",
-            status="ACTIVE"
-        )
-        seller_user = User(
-            name="Reliance Retail Supercenter",
-            email="seller@retailhub.in",
-            password_hash=get_password_hash("Seller@123"),
-            role="Seller",
-            phone="022-35553000",
-            organization="Reliance Retail Ltd.",
-            status="ACTIVE"
-        )
-        consumer_user = User(
-            name="Ramesh Kumar",
-            email="consumer@gmail.com",
-            password_hash=get_password_hash("Consumer@123"),
-            role="Consumer",
-            phone="9988776655",
-            organization="Citizen Consumer",
-            status="ACTIVE"
-        )
-        db.add_all([admin_user, inspector_user, mfg_user, seller_user, consumer_user])
-        db.commit()
-        db.refresh(admin_user)
-        db.refresh(inspector_user)
-        db.refresh(mfg_user)
+        # 1. Do not auto-generate fake/demo users. Real users register through the registration portal.
 
         # 2. Seed Categories
         cat_food = Category(name="Food & Grain Commodities", description="Packaged grains, flours, pulses, spices, edible provisions", standard_units="g,kg,N")

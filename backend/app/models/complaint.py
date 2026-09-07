@@ -16,7 +16,8 @@ class Complaint(Base):
     complaint_type = Column(String(100), default="Overcharging (Above MRP)")  # Overcharging, Missing Declarations, Non-Standard Units, Deceptive Packaging
     description = Column(Text, nullable=False)
     image_path = Column(String(255), nullable=True)
-    status = Column(String(50), default="SUBMITTED")  # SUBMITTED, UNDER_INVESTIGATION, RESOLVED, DISMISSED
+    status = Column(String(50), default="SUBMITTED")  # SUBMITTED, UNDER_INVESTIGATION, RESOLVED, REJECTED
+    officer_notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=utc_now)
 
     # Relationships

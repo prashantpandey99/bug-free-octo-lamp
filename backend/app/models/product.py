@@ -7,6 +7,7 @@ class Product(Base):
     __tablename__ = "products"
 
     id = Column(Integer, primary_key=True, index=True)
+    barcode = Column(String(50), unique=True, index=True, nullable=True)
     product_name = Column(String(200), nullable=False, index=True)
     brand = Column(String(100), nullable=True, index=True)
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)

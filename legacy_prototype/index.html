@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="AI & OCR Powered Automated Compliance Checking System for Packaged Commodities under Legal Metrology Act 2009 and Legal Metrology (Packaged Commodities) Rules 2011.">
+  <meta name="keywords" content="Legal Metrology, LMR 2011, Packaged Commodities, Label Compliance, OCR Scanner, Consumer Affairs, Enforcement">
+  <meta name="author" content="Legal Metrology Directorate">
+  <title>Legal Metrology Packaged Commodities Compliance Checking System (LMR 2011)</title>
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="styles/main.css">
+  <link rel="stylesheet" href="styles/components.css">
+  <link rel="stylesheet" href="styles/dashboard.css">
+  <link rel="stylesheet" href="styles/enhancements.css">
+
+  <!-- Chart.js and Tesseract.js CDNs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.4/dist/tesseract.min.js"></script>
+</head>
+<body>
+
+  <!-- Confetti Canvas (global, above everything) -->
+  <canvas id="confettiCanvas"></canvas>
+
+  <!-- 1. Indian Flag Ribbon / RESTRICTED USE Banner -->
+  <div class="gov-ribbon">
+    <div class="gov-ribbon-left">
+      <div class="gov-ribbon-flag"><span></span><span></span><span></span></div>
+      <span>GOVERNMENT OF INDIA &nbsp;•&nbsp; MINISTRY OF CONSUMER AFFAIRS &nbsp;•&nbsp; DIRECTORATE OF LEGAL METROLOGY</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:16px;">
+      <span class="gov-ribbon-restricted">RESTRICTED USE — GOVERNMENT PORTAL</span>
+      <span style="font-size:10px; font-family:var(--font-mono); color:#334155;">PORTAL REF: IND-LMR-2026-ENFORCEMENT</span>
+    </div>
+  </div>
+
+  <!-- 2. Geo-IP Lock Banner (dismissible) -->
+  <div id="geoipBannerContainer"></div>
+
+  <!-- Sidebar Overlay (mobile) -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="mainSidebar">
+      <div class="brand-section">
+        <img src="assets/emblem.svg" alt="Legal Metrology Emblem" class="brand-logo">
+        <div class="brand-text">
+          <h1>METROLOGY-AI</h1>
+          <span>LMR 2011 COMPLIANCE</span>
+          <!-- NIC Logo Badge -->
+          <div class="nic-logo-badge">🏛 NIC · GOI PORTAL</div>
+        </div>
+      </div>
+      <!-- Sidebar restricted ribbon -->
+      <div class="sidebar-ribbon-badge">🔒 AUTHORIZED OFFICERS ONLY</div>
+
+      <nav class="nav-menu">
+        <button class="nav-item active" data-view="dashboard" id="navDashboard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+          Enforcement Dashboard
+        </button>
+        <button class="nav-item" data-view="scanner" id="navScanner">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><line x1="7" y1="12" x2="17" y2="12"></line></svg>
+          Live Label Scanner &amp; OCR
+        </button>
+        <button class="nav-item" data-view="repository" id="navRepository">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          Inspection Repository
+        </button>
+        <button class="nav-item" data-view="rules" id="navRules">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20"></path><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+          LMR 2011 Rules Matrix
+        </button>
+        <button class="nav-item" data-view="audit" id="navAudit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+          Merchant Self-Audit Portal
+        </button>
+        <a href="login.html" class="nav-item" style="text-decoration:none; color:inherit; display:flex; align-items:center; gap:10px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          Enforcement Officer Login
+        </a>
+      </nav>
+
+      <div class="sidebar-officer-card" id="sidebarOfficerCard">
+        <div class="sidebar-officer-head">
+          <!-- 7. Pulsing Status Indicator -->
+          <span id="sidebarOfficerRoleTag" class="officer-status-pulse">OFFICER ACTIVE</span>
+          <a href="login.html" style="font-size:11px; color:var(--accent-cyan); text-decoration:none;">Switch ⇋</a>
+        </div>
+        <div class="sidebar-officer-name" id="sidebarOfficerName">Insp. Rajesh Verma</div>
+        <div class="sidebar-officer-zone" id="sidebarOfficerStation">Central Legal Metrology Enforcement Wing</div>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="statutory-badge">
+          <span>🏛️</span>
+          <div>
+            <strong>Legal Metrology Act, 2009</strong><br>
+            Packaged Commodities Rules, 2011
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Wrapper -->
+    <div class="main-wrapper">
+      <!-- Header -->
+      <header class="top-header">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <!-- Hamburger toggle (mobile) -->
+          <button class="hamburger-btn" id="hamburgerBtn" title="Toggle Sidebar" type="button">
+            <span></span><span></span><span></span>
+          </button>
+          <div class="header-title">
+            <h2>Legal Metrology Enforcement System</h2>
+            <p>Department of Consumer Affairs • Government of India</p>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <!-- 3. Live IST Clock & Session Uptime -->
+          <div class="header-clock-wrap">
+            <span class="header-clock-time" id="headerClockTime">--:--:-- IST</span>
+            <span class="header-clock-date" id="headerClockDate">Loading...</span>
+            <span class="header-session-uptime" id="headerSessionUptime">SESSION: 00:00:00</span>
+          </div>
+
+          <!-- Active Officer Profile Chip -->
+          <div class="officer-profile-chip" id="headerOfficerChip">
+            <div class="officer-avatar-box" id="headerOfficerAvatar">👮‍♂️</div>
+            <div class="officer-info-box">
+              <strong class="officer-name-title" id="headerOfficerName">Insp. Rajesh Verma</strong>
+              <span class="officer-meta-sub" id="headerOfficerBadge">Badge: IND-LM-0942 • North Zone</span>
+            </div>
+            <div class="officer-actions-wrap">
+              <a href="login.html" class="btn-header-auth" id="btnHeaderSwitchOfficer" title="Switch Officer Account">
+                🔄 Switch
+              </a>
+              <button type="button" class="btn-header-auth" id="btnHeaderLogout" title="Sign out of Officer Portal">
+                🚪 Sign Out
+              </button>
+            </div>
+          </div>
+
+          <div class="role-selector-wrap">
+            <label for="userRoleSelect">Role Mode:</label>
+            <select id="userRoleSelect">
+              <option value="INSPECTOR">Enforcement Officer (Inspector)</option>
+              <option value="ANALYST">Legal Metrology Analyst</option>
+              <option value="MERCHANT">Merchant / Manufacturer</option>
+            </select>
+          </div>
+          <span class="role-pill role-inspector" id="currentRoleBadge">INSPECTOR</span>
+
+          <!-- 5. Dark Mode Toggle -->
+          <button class="dark-mode-toggle" id="darkModeToggle" title="Toggle Dark Mode" type="button">🌙</button>
+        </div>
+      </header>
+
+      <!-- VIEW 1: DASHBOARD -->
+      <section class="view-section active" id="view-dashboard">
+        <!-- Swipe hint (mobile) -->
+        <div class="swipe-hint">← Swipe to navigate between views →</div>
+
+        <!-- Trend Alerts Banner Container -->
+        <div id="trendAlertsContainer"></div>
+
+        <!-- KPI Cards -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon-wrap icon-blue">📋</div>
+            <div class="stat-info">
+              <span>Total Inspections</span>
+              <strong id="statTotalInspections" data-countup="6">6</strong>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon-wrap icon-green">🛡️</div>
+            <div class="stat-info">
+              <span>Compliance Rate</span>
+              <strong id="statComplianceRate" data-countup="67" data-suffix="%">67%</strong>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon-wrap icon-red">⚠️</div>
+            <div class="stat-info">
+              <span>Statutory Breaches</span>
+              <strong id="statTotalBreaches" data-countup="2">2</strong>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon-wrap icon-amber">⚖️</div>
+            <div class="stat-info">
+              <span>Penalty Liabilities</span>
+              <strong id="statTotalFines" data-countup="75000" data-prefix="₹ ">₹ 75,000</strong>
+            </div>
+          </div>
+
+          <!-- 14. Live Inspection Counter Card -->
+          <div class="live-counter-card">
+            <div class="live-pulse-tag">LIVE</div>
+            <div class="live-counter-icon">📡</div>
+            <div class="live-counter-info">
+              <span>Inspections Today</span>
+              <strong id="inspectionsTodayValue">3</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- 15. Risk Heat Map Section -->
+        <div class="risk-heatmap-section" id="riskHeatmapContainer"></div>
+
+        <!-- Charts Grid -->
+        <div class="charts-grid">
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <h3>Statutory Compliance Distribution</h3>
+              <span>LMR 2011 Status</span>
+            </div>
+            <div class="chart-canvas-wrap">
+              <canvas id="complianceStatusChart"></canvas>
+            </div>
+          </div>
+
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <h3>Top Violated Statutory Rules</h3>
+              <span>Frequency Count</span>
+            </div>
+            <div class="chart-canvas-wrap">
+              <canvas id="violatedRulesChart"></canvas>
+            </div>
+          </div>
+
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <h3>Category Risk Distribution</h3>
+              <span>Risk Intensity %</span>
+            </div>
+            <div class="chart-canvas-wrap">
+              <canvas id="categoryRiskChart"></canvas>
+            </div>
+          </div>
+
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <h3>Inspection &amp; Violation Trend</h3>
+              <span>6 Months Timeline</span>
+            </div>
+            <div class="chart-canvas-wrap">
+              <canvas id="inspectionTrendChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 2: LIVE SCANNER & LABEL ANALYZER -->
+      <section class="view-section" id="view-scanner">
+        <!-- Swipe hint (mobile) -->
+        <div class="swipe-hint">← Swipe to navigate →</div>
+        <!-- Sample Selector Toolbar -->
+        <div class="sample-bar">
+          <label for="sampleProductSelect"><strong>⚡ Preloaded Test Commodities:</strong></label>
+          <select id="sampleProductSelect">
+            <!-- Dynamically populated from sample-data.js -->
+          </select>
+          <button class="btn btn-outline btn-sm" id="btnStartCamera">📷 Open Live Camera</button>
+        </div>
+
+        <div class="scanner-grid">
+          <!-- Left Column: Image Canvas Viewport -->
+          <div class="card-panel">
+            <div class="panel-header">
+              <div class="panel-title">
+                <h3>Package Visual Evidence</h3>
+                <span>Principal Display Panel (PDP)</span>
+              </div>
+              <span class="status-pill status-pass">Live Canvas</span>
+            </div>
+
+            <!-- Canvas Viewport -->
+            <div class="canvas-wrapper">
+              <canvas id="labelPreviewCanvas"></canvas>
+              <div id="cameraContainer" style="display:none; text-align:center;">
+                <video id="cameraVideoFeed" autoplay playsinline></video>
+                <div style="margin-top:12px;">
+                  <button class="btn btn-primary" id="btnCaptureSnapshot">📸 Capture Label Snapshot</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Upload Drop Zone -->
+            <div class="drop-zone" id="dropZoneArea">
+              <input type="file" id="labelFileInput" accept="image/*" style="display:none;">
+              <p>📁 Drag &amp; Drop custom packaged product image here, or <strong>Click to Upload</strong></p>
+              <small>Supports PNG, JPG, SVG, WebP packaging images</small>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="progress-container">
+              <div class="progress-track">
+                <div class="progress-bar" id="scanProgressBar"></div>
+              </div>
+              <div class="progress-status">
+                <span id="scanStatusText">Ready for compliance audit</span>
+                <span>Tesseract &amp; Rule Engine</span>
+              </div>
+            </div>
+
+            <!-- Action Toolbar -->
+            <div class="canvas-toolbar">
+              <button class="btn btn-primary" id="btnRunAnalysis" style="flex:1;">
+                ⚡ Run Compliance Scan &amp; Rule Engine
+              </button>
+            </div>
+          </div>
+
+          <!-- Right Column: Results & Rule Compliance Drawer -->
+          <div class="card-panel">
+            <div class="panel-header">
+              <div class="panel-title">
+                <h3>Statutory Compliance Audit</h3>
+                <span>Rule 6 &amp; Schedule II</span>
+              </div>
+              <span class="status-pill status-pass" id="overallStatusBadge">COMPLIANT</span>
+            </div>
+
+            <!-- Hero Score Card -->
+            <div class="score-hero-card" id="complianceScoreCard">
+              <div class="score-number-group">
+                <div class="score-big" id="complianceScoreValue">100%</div>
+                <div>
+                  <strong style="color:var(--text-primary); display:block; font-size:14px;">Audit Score</strong>
+                  <small style="color:var(--text-muted);">Legal Metrology</small>
+                </div>
+              </div>
+              <div class="score-stats-trio">
+                <div class="stat-chip">
+                  <small>Critical</small>
+                  <strong style="color:var(--accent-rose);" id="statCriticalCount">0</strong>
+                </div>
+                <div class="stat-chip">
+                  <small>Warnings</small>
+                  <strong style="color:var(--accent-amber);" id="statHighCount">0</strong>
+                </div>
+                <div class="stat-chip">
+                  <small>Passed</small>
+                  <strong style="color:var(--accent-emerald);" id="statPassedCount">9</strong>
+                </div>
+              </div>
+            </div>
+
+            <!-- Commodity Metadata Grid -->
+            <div class="meta-form-grid">
+              <div class="form-group">
+                <label>Product Name</label>
+                <input type="text" id="metaProductName" value="Golden Leaf Premium Assam Tea">
+              </div>
+              <div class="form-group">
+                <label>Brand / Trademark</label>
+                <input type="text" id="metaBrand" value="Golden Leaf">
+              </div>
+              <div class="form-group">
+                <label>Category</label>
+                <input type="text" id="metaCategory" value="Beverages / Tea">
+              </div>
+              <div class="form-group">
+                <label>Batch / Lot Number</label>
+                <input type="text" id="metaBatchNo" value="GLT-2026-B84">
+              </div>
+              <div class="form-group" style="grid-column: span 2;">
+                <label>Barcode / GTIN</label>
+                <input type="text" id="metaBarcode" value="8901234567890">
+              </div>
+            </div>
+
+            <!-- Interactive PDP Simulation Sliders (Schedule II) -->
+            <div class="pdp-slider-box">
+              <div class="slider-row">
+                <label>Principal Display Panel (PDP) Area:</label>
+                <span id="pdpAreaDisplay">320 cm²</span>
+              </div>
+              <input type="range" id="pdpAreaInput" min="50" max="800" value="320" step="10">
+
+              <div class="slider-row" style="margin-top:12px;">
+                <label>Actual Net Qty Font Height:</label>
+                <span id="fontHeightDisplay">4.2 mm</span>
+              </div>
+              <input type="range" id="fontHeightInput" min="0.5" max="10" value="4.2" step="0.1">
+            </div>
+
+            <!-- Penalty Summary Box -->
+            <div id="penaltyEstimateBox">
+              <!-- Dynamically populated -->
+            </div>
+
+            <!-- Clause-by-Clause Evaluation Accordion -->
+            <div class="rules-list" id="rulesAccordionList">
+              <!-- Dynamically populated from rule-engine.js -->
+            </div>
+
+            <!-- Action Buttons for Reports -->
+            <div style="display:flex; gap:12px; margin-top:20px; flex-wrap:wrap;">
+              <button class="btn btn-outline btn-sm" id="btnViewOfficialReport" style="flex:1;">
+                📄 Official Inspection Report
+              </button>
+              <button class="btn btn-danger btn-sm" id="btnViewLegalNotice" style="flex:1;">
+                ⚖ Generate Section 36 Notice
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 3: INSPECTION REPOSITORY -->
+      <section class="view-section" id="view-repository">
+        <div class="toolbar-bar">
+          <div class="search-input-wrap">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="searchRepoInput" placeholder="Search inspections by product name, brand, barcode or ID...">
+          </div>
+          <div class="filter-actions">
+            <select id="filterStatusSelect">
+              <option value="ALL">All Compliance Statuses</option>
+              <option value="COMPLIANT">Statutory Compliant</option>
+              <option value="PARTIAL_COMPLIANT">Partially Compliant</option>
+              <option value="NON_COMPLIANT">Non-Compliant / Breach</option>
+            </select>
+            <button class="btn btn-outline" id="btnExportCsv">📥 Export CSV Dataset</button>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Inspection Ref</th>
+                <th>Date</th>
+                <th>Product &amp; Category</th>
+                <th>Compliance Status</th>
+                <th>Score</th>
+                <th>Enforcement Action</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="repoTableBody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- VIEW 4: LMR 2011 RULES MATRIX -->
+      <section class="view-section" id="view-rules">
+        <div style="margin-bottom:24px;">
+          <h3 style="font-size:18px; font-weight:700;">Legal Metrology (Packaged Commodities) Rules, 2011 Reference Guide</h3>
+          <p style="font-size:13px; color:var(--text-secondary);">Statutory clauses, mandatory declarations, standard metric units, and penalty schedules.</p>
+        </div>
+
+        <div class="rules-matrix-grid">
+          <div class="matrix-card">
+            <span class="matrix-clause-tag">Rule 6(1)(a)</span>
+            <h4>Manufacturer / Packer / Importer</h4>
+            <p>Every package must bear complete registered name and physical postal address (plot/street, city, state, 6-digit pincode) of manufacturer, packer, or importer.</p>
+          </div>
+
+          <div class="matrix-card">
+            <span class="matrix-clause-tag">Rule 6(1)(b)</span>
+            <h4>Generic / Common Commodity Name</h4>
+            <p>Prominent mention of the commodity's standard or generic commercial designation on the Principal Display Panel (PDP).</p>
+          </div>
+
+          <div class="matrix-card">
+            <span class="matrix-clause-tag">Rule 6(1)(c) &amp; Rule 12</span>
+            <h4>Net Quantity &amp; Standard Units</h4>
+            <p>Strict SI metric units (g, kg, ml, l, N, U) without trailing full stops or pluralisation. Prohibits non-standard symbols like "gm", "gms", "kgs", "ltrs".</p>
+          </div>
+
+          <div class="matrix-card">
+            <span class="matrix-clause-tag">Rule 6(1)(d)</span>
+            <h4>Month &amp; Year of Manufacture / Packing</h4>
+            <p>Clear declaration of Month and 2/4-digit Year of manufacturing, packing, or import (e.g. 08/2026 or Aug 2026), alongside expiry/best before details.</p>
+          </div>
+
+          <div class="matrix-card">
+            <span class="matrix-clause-tag">Rule 6(1)(e)</span>
+            <h4>Maximum Retail Price (MRP)</h4>
+            <p>Mandatory declaration in INR with explicit phrase "(inclusive of all taxes)" or "(incl. of all taxes)". Dual pricing or price alteration is strictly penalized.</p>
+          </div>
+
+          <div class="matrix-card">
+            <span class="matrix-clause-tag">Rule 6(1)(f) Amendment</span>
+            <h4>Unit Sale Price (USP)</h4>
+            <p>Mandatory for packages containing net quantity greater than 1 kg, 1 L, or multi-piece packs (e.g. ₹ 0.69 per g or ₹ 55.00 per kg).</p>
+          </div>
+
+          <div class="matrix-card">
+            <span class="matrix-clause-tag">Rule 6(1)(n)</span>
+            <h4>Consumer Grievance Redressal</h4>
+            <p>Mandatory declaration of official contact person/designation, registered postal address, active telephone / toll-free helpline, and valid email address.</p>
+          </div>
+
+          <div class="matrix-card">
+            <span class="matrix-clause-tag">Schedule II</span>
+            <h4>Minimum Font Size on PDP</h4>
+            <p>Prescribes minimum numeral height for Net Quantity: &le;50g (1.0mm), 50-200g (2.0mm), 200g-1kg (4.0mm), &gt;1kg (6.0mm).</p>
+          </div>
+
+          <div class="matrix-card">
+            <span class="matrix-clause-tag">Section 36(1)</span>
+            <h4>Statutory Penalties &amp; Offenses</h4>
+            <p>First Offense: Up to ₹ 25,000 fine. Second Offense: ₹ 50,000 fine. Subsequent Offenses: Up to ₹ 1,00,000 fine or imprisonment up to 1 year.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 5: MERCHANT SELF-AUDIT PORTAL -->
+      <section class="view-section" id="view-audit">
+        <div class="card-panel" style="max-width:800px; margin:0 auto;">
+          <div class="panel-header">
+            <div class="panel-title">
+              <h3>Manufacturer / Merchant Pre-Market Audit Simulator</h3>
+              <span>Pre-flight Label Check</span>
+            </div>
+            <span class="status-pill status-pass">Self-Audit</span>
+          </div>
+
+          <p style="font-size:13px; color:var(--text-secondary); margin-bottom:20px;">
+            Use this self-assessment workflow before dispatching packaged commodity batches to retail and e-commerce platforms to eliminate non-compliance fines.
+          </p>
+
+          <div class="rules-list">
+            <label style="display:flex; gap:12px; align-items:flex-start; padding:12px; background:var(--bg-secondary); border-radius:8px; cursor:pointer;">
+              <input type="checkbox" checked style="margin-top:3px;">
+              <div>
+                <strong>Complete Registered Address with Pincode</strong>
+                <p style="font-size:12px; color:var(--text-muted);">Verified that manufacturer / packer postal address includes street, city, state and valid 6-digit pincode.</p>
+              </div>
+            </label>
+
+            <label style="display:flex; gap:12px; align-items:flex-start; padding:12px; background:var(--bg-secondary); border-radius:8px; cursor:pointer;">
+              <input type="checkbox" checked style="margin-top:3px;">
+              <div>
+                <strong>Metric Unit Compliance (No 'gms' or 'kgs')</strong>
+                <p style="font-size:12px; color:var(--text-muted);">Declared net quantity using single letter 'g', 'kg', 'ml', 'l' without dots.</p>
+              </div>
+            </label>
+
+            <label style="display:flex; gap:12px; align-items:flex-start; padding:12px; background:var(--bg-secondary); border-radius:8px; cursor:pointer;">
+              <input type="checkbox" checked style="margin-top:3px;">
+              <div>
+                <strong>MRP with "(inclusive of all taxes)"</strong>
+                <p style="font-size:12px; color:var(--text-muted);">MRP phrase explicitly states taxes are included.</p>
+              </div>
+            </label>
+
+            <label style="display:flex; gap:12px; align-items:flex-start; padding:12px; background:var(--bg-secondary); border-radius:8px; cursor:pointer;">
+              <input type="checkbox" checked style="margin-top:3px;">
+              <div>
+                <strong>Active Customer Care Email &amp; Phone</strong>
+                <p style="font-size:12px; color:var(--text-muted);">Consumer care cell telephone and working email address provided on label.</p>
+              </div>
+            </label>
+          </div>
+
+          <div style="margin-top:24px; text-align:right;">
+            <button class="btn btn-success" onclick="window.appInstance.switchView('scanner')">
+              🚀 Launch Label Scan Verification
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- MODAL 1: OFFICIAL INSPECTION REPORT (PDF PREVIEW) -->
+  <div class="modal-backdrop" id="reportModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Official Legal Metrology Inspection Report</h3>
+        <button class="btn btn-sm btn-outline modal-close">✕</button>
+      </div>
+      <div class="modal-body" id="reportModalBody">
+        <!-- Rendered by report-generator.js -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline modal-close">Close</button>
+        <button class="btn btn-primary" id="btnPrintReportModal">🖨️ Print / Save as PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: STATUTORY LEGAL NOTICE OF VIOLATION (SECTION 36) -->
+  <div class="modal-backdrop" id="noticeModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 style="color:var(--accent-rose);">Statutory Notice of Violation (Section 36)</h3>
+        <button class="btn btn-sm btn-outline modal-close">✕</button>
+      </div>
+      <div class="modal-body" id="noticeModalBody">
+        <!-- Rendered by report-generator.js -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline modal-close">Close</button>
+        <button class="btn btn-danger" id="btnPrintNoticeModal">⚖ Issue &amp; Print Legal Notice</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Application Scripts -->
+  <script src="scripts/auth.js"></script>
+  <script src="scripts/rule-engine.js"></script>
+  <script src="scripts/ocr-engine.js"></script>
+  <script src="scripts/sample-data.js"></script>
+  <script src="scripts/report-generator.js"></script>
+  <script src="scripts/charts.js"></script>
+  <script src="scripts/app.js"></script>
+  <!-- Enhancement Features -->
+  <script src="scripts/enhancements.js"></script>
+
+</body>
+</html>

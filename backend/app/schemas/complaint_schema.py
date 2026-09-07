@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict
 
 class ComplaintCreate(BaseModel):
     product_id: Optional[int] = None
-    complainant_name: str
+    complainant_name: Optional[str] = None
     complainant_contact: Optional[str] = None
     product_name: str
     store_details: Optional[str] = None

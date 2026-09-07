@@ -1,0 +1,11 @@
+search-paths = ["."]
+project-excludes = [
+  "**/node_modules",
+  "**/.venv",
+  ".pytest_cache"
+]
+
+[errors]
+missing-import = "ignore"
+missing-source = "ignore"
+unannotated-attribute = "ignore"

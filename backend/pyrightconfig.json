@@ -1,0 +1,23 @@
+{
+  "include": [
+    "."
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/.venv"
+  ],
+  "venvPath": "..",
+  "venv": ".venv",
+  "extraPaths": [
+    "."
+  ],
+  "pythonPlatform": "Windows",
+  "typeCheckingMode": "off",
+  "reportGeneralTypeIssues": false,
+  "reportArgumentType": false,
+  "reportAttributeAccessIssue": false,
+  "reportCallIssue": false,
+  "reportOptionalMemberAccess": false,
+  "reportMissingImports": false,
+  "reportMissingTypeStubs": false
+}

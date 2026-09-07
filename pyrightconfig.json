@@ -1,0 +1,26 @@
+{
+  "include": [
+    "backend"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/.venv",
+    "frontend",
+    "dist",
+    "build"
+  ],
+  "venvPath": ".",
+  "venv": ".venv",
+  "extraPaths": [
+    "backend"
+  ],
+  "pythonPlatform": "Windows",
+  "typeCheckingMode": "off",
+  "reportGeneralTypeIssues": false,
+  "reportArgumentType": false,
+  "reportAttributeAccessIssue": false,
+  "reportCallIssue": false,
+  "reportOptionalMemberAccess": false,
+  "reportMissingImports": false,
+  "reportMissingTypeStubs": false
+}

@@ -1,6 +1,7 @@
 import os
 import re
 from typing import Dict, Any, Optional, Tuple
+# pyrefly: ignore [missing-import]
 from PIL import Image, ImageEnhance, ImageFilter
 
 class OCRService:
@@ -11,6 +12,7 @@ class OCRService:
 
     def _init_ocr_engine(self):
         try:
+            # pyrefly: ignore [missing-import]
             import pytesseract
             if self.tesseract_cmd:
                 pytesseract.pytesseract.tesseract_cmd = self.tesseract_cmd
@@ -44,6 +46,7 @@ class OCRService:
 
         if self._tesseract_available:
             try:
+                # pyrefly: ignore [missing-import]
                 import pytesseract
                 preprocessed = self.preprocess_image(image_path)
                 data = pytesseract.image_to_data(preprocessed, output_type=pytesseract.Output.DICT)

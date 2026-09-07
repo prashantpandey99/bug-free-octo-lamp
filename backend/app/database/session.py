@@ -1,8 +1,12 @@
 import os
+from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./legal_metrology.db")
+# Anchor to project root directory
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_DB_PATH = (PROJECT_ROOT / "legal_metrology.db").resolve()
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DEFAULT_DB_PATH.as_posix()}")
 
 connect_args = {}
 if DATABASE_URL.startswith("sqlite"):

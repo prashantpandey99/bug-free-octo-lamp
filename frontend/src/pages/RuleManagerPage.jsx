@@ -207,7 +207,7 @@ export default function RuleManagerPage() {
             }}
           >
             <span>
-              ℹ️ <strong>Read-Only Regulatory View:</strong> You are currently signed in as <strong>{user?.role || "Guest"}</strong>. To edit, add, or toggle statutory rules in the matrix, switch to <strong>"🏛️ Admin Login"</strong> using the <strong>"⚡ Fast Demo Roles"</strong> button above.
+              ℹ️ <strong>Read-Only Regulatory View:</strong> You are currently signed in as <strong>{user?.role || "Guest"}</strong>. To edit, add, or toggle statutory rules in the matrix, please sign in with an official <strong>Administrator account</strong>.
             </span>
           </div>
         )}

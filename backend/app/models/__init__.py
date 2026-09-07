@@ -7,6 +7,8 @@ from app.models.inspection import Inspection, Violation
 from app.models.report import Report
 from app.models.complaint import Complaint
 from app.models.audit_log import AuditLog
+from app.models.otp import OtpToken
+from app.models.otp_models import OtpRequest, RefreshToken
 
 __all__ = [
     "User",
@@ -19,5 +21,8 @@ __all__ = [
     "Violation",
     "Report",
     "Complaint",
-    "AuditLog"
+    "AuditLog",
+    "OtpToken",
+    "OtpRequest",
+    "RefreshToken"
 ]

@@ -1,11 +1,19 @@
+import os
 from typing import List, Optional
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.models.compliance_check import ComplianceCheck, ComplianceResult
 from app.models.user import User
-from app.schemas.compliance_schema import ComplianceCheckRequest, ComplianceCheckResponse, ComplianceResultItem
+from app.schemas.compliance_schema import (
+    ComplianceCheckRequest, ComplianceCheckResponse, ComplianceResultItem,
+    CompanyNoticeIssueRequest, CompanyNoticeIssueResponse
+)
 from app.services.compliance_engine import ComplianceEngine, STATUTORY_DISCLAIMER
+from app.services.report_generator import ReportGenerator, DEFAULT_REPORTS_DIR
+from app.services.email_service import dispatch_statutory_company_notice_email
 from app.auth.dependencies import get_optional_user
 from app.services.audit_service import log_audit_event
 
@@ -116,3 +124,110 @@ def get_product_checks(product_id: int, db: Session = Depends(get_db)):
             )
         )
     return response_list
+
+
+@router.post("/issue-company-notice", response_model=CompanyNoticeIssueResponse)
+def issue_company_notice_from_compliance(
+    req: CompanyNoticeIssueRequest,
+    request: Request,
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Issues an official Legal Metrology Statutory Show-Cause Notice directly from product scan/label data.
+    Generates the official signed PDF notice under Section 15 & 36(1) of Legal Metrology Act, 2009,
+    and dispatches the notice via email directly to the brand/company's registered compliance email.
+    """
+    timestamp = int(datetime.now(timezone.utc).timestamp())
+    notice_id = f"NOTICE-LMR-SCAN-{timestamp}"
+    officer_name = current_user.name if current_user else "Authorized Inspector of Legal Metrology"
+    officer_station = "Central Legal Metrology Enforcement Directorate, New Delhi"
+
+    # 1. Generate Statutory PDF Notice
+    report_gen = ReportGenerator()
+    notice_payload = {
+        "notice_id": notice_id,
+        "docket_id": f"INSP-SCAN-{timestamp}",
+        "company_name": req.company_name,
+        "company_address": req.company_address,
+        "company_email": req.company_email,
+        "product_name": req.product_name,
+        "brand": req.brand or "Declared Brand",
+        "batch_number": req.batch_number or "Declared Batch",
+        "section_violated": req.section_violated or "Section 36(1) of Legal Metrology Act, 2009 read with LMR 2011",
+        "compliance_deadline_days": req.compliance_deadline_days or 15,
+        "compounding_penalty": req.compounding_penalty or "₹ 25,000",
+        "inspection_summary": "Statutory label audit observed non-conformance of packaged commodity declarations.",
+        "violations": req.violations or [],
+        "officer_directions": req.officer_directions or (
+            f"You are hereby directed to show cause in writing within {req.compliance_deadline_days or 15} calendar days "
+            f"as to why legal proceedings under Section 36(1) of the Legal Metrology Act, 2009 should not be instituted. "
+            f"Certified packaging proofs and compounding application under Section 48 must be submitted to the Directorate."
+        )
+    }
+
+    pdf_path = None
+    try:
+        pdf_path = report_gen.generate_statutory_notice_pdf(notice_payload, officer_name)
+    except Exception as e:
+        print(f"Error generating compliance notice PDF: {e}")
+
+    # 2. Dispatch Statutory Email to Company with PDF attachment
+    email_res = dispatch_statutory_company_notice_email(
+        notice_id=notice_id,
+        company_name=req.company_name,
+        company_email=req.company_email,
+        company_address=req.company_address,
+        product_name=req.product_name,
+        brand=req.brand,
+        batch_number=req.batch_number,
+        section_violated=req.section_violated,
+        compounding_penalty=req.compounding_penalty,
+        compliance_deadline_days=req.compliance_deadline_days or 15,
+        officer_name=officer_name,
+        officer_designation="Inspector of Legal Metrology",
+        officer_station=officer_station,
+        violations_details=req.violations,
+        officer_directions=req.officer_directions,
+        pdf_path=pdf_path
+    )
+
+    # 3. Log Immutable Audit Log
+    log_audit_event(
+        db=db,
+        action="STATUTORY_NOTICE_SERVED_TO_COMPANY",
+        entity="PRODUCT",
+        entity_id=str(req.product_id or "SCAN"),
+        user=current_user,
+        ip_address=request.client.host if request.client else "127.0.0.1",
+        details=f"Statutory Notice #{notice_id} served on {req.company_name} ({req.company_email}). Delivery: {email_res.get('delivery_status')}"
+    )
+
+    return CompanyNoticeIssueResponse(
+        success=True,
+        notice_id=notice_id,
+        recipient_email=req.company_email,
+        company_name=req.company_name,
+        delivery_status=email_res.get("delivery_status", "DISPATCHED"),
+        download_url=f"/api/compliance/notice/{notice_id}/download",
+        message=f"Statutory Show-Cause Notice #{notice_id} successfully issued and dispatched to {req.company_name} ({req.company_email}).",
+        created_at=datetime.now(timezone.utc)
+    )
+
+
+@router.get("/notice/{notice_id}/download")
+def download_compliance_notice_pdf(notice_id: str):
+    clean_id = notice_id.replace("..", "").replace("/", "").replace("\\", "").strip()
+    filename = f"Statutory_Notice_{clean_id}.pdf"
+    file_path = os.path.join(DEFAULT_REPORTS_DIR, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Statutory notice PDF '{filename}' not found on server."
+        )
+    return FileResponse(
+        file_path,
+        media_type="application/pdf",
+        filename=filename
+    )
+

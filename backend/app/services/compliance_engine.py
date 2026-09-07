@@ -226,7 +226,7 @@ class ComplianceEngine:
                     result=result_status,
                     severity=rule.severity,
                     actual_value=str(actual_val) if actual_val is not None else "NOT_DECLARED",
-                    expected_value=rule.expected_value or "Statutory Compliance",
+                    expected_value=str(rule.expected_value) if rule.expected_value else "Statutory Compliance",
                     explanation=explanation,
                     recommended_action=rec_action
                 )
@@ -259,7 +259,8 @@ class ComplianceEngine:
 
         check_record = None
         if save_to_db:
-            product_id = product_data.get("product_id")
+            raw_pid = product_data.get("product_id")
+            product_id = int(raw_pid) if raw_pid is not None and str(raw_pid).isdigit() else None
             check_record = ComplianceCheck(
                 product_id=product_id,
                 checked_by=user_id,

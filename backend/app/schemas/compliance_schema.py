@@ -4,7 +4,8 @@ from pydantic import BaseModel, ConfigDict
 
 class ComplianceCheckRequest(BaseModel):
     product_id: Optional[int] = None
-    product_name: str
+    category_id: Optional[int] = None
+    product_name: Optional[str] = "Packaged Commodity"
     brand: Optional[str] = None
     manufacturer_name: Optional[str] = None
     manufacturer_address: Optional[str] = None
@@ -14,9 +15,9 @@ class ComplianceCheckRequest(BaseModel):
     batch_number: Optional[str] = None
     manufacturing_date: Optional[str] = None
     expiry_date: Optional[str] = None
-    net_quantity: float
-    unit: str
-    mrp: float
+    net_quantity: Optional[float] = 0.0
+    unit: Optional[str] = ""
+    mrp: Optional[float] = 0.0
     mrp_declaration_text: Optional[str] = None
     unit_sale_price: Optional[str] = None
     customer_care_email: Optional[str] = None
@@ -53,3 +54,32 @@ class ComplianceCheckResponse(BaseModel):
     disclaimer: str
     results: List[ComplianceResultItem]
     checked_at: datetime
+
+
+class CompanyNoticeIssueRequest(BaseModel):
+    product_id: Optional[int] = None
+    product_name: str
+    brand: Optional[str] = "Declared Brand"
+    batch_number: Optional[str] = "Declared Batch"
+    barcode: Optional[str] = None
+    company_name: str
+    company_address: str
+    company_email: str
+    section_violated: Optional[str] = "Section 36(1) of Legal Metrology Act, 2009 read with LMR 2011"
+    compounding_penalty: Optional[str] = "₹ 25,000"
+    compliance_deadline_days: Optional[int] = 15
+    officer_directions: Optional[str] = None
+    violations: Optional[List[str]] = []
+    inspection_id: Optional[int] = None
+
+
+class CompanyNoticeIssueResponse(BaseModel):
+    success: bool
+    notice_id: str
+    recipient_email: str
+    company_name: str
+    delivery_status: str
+    download_url: str
+    message: str
+    created_at: datetime
+

@@ -1,0 +1,18 @@
+[tool.pyrefly]
+search-paths = ["backend"]
+project-excludes = ["frontend", ".venv", "legacy_prototype", "dist", "build"]
+
+[tool.pyrefly.errors]
+missing-import = "ignore"
+missing-source = "ignore"
+unannotated-attribute = "ignore"
+
+[tool.pyright]
+include = ["backend"]
+exclude = ["**/node_modules", "**/.venv", "frontend", "dist", "build"]
+venvPath = "."
+venv = ".venv"
+extraPaths = ["backend"]
+typeCheckingMode = "off"
+reportMissingImports = false
+reportGeneralTypeIssues = false

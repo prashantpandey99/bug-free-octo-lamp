@@ -5,7 +5,7 @@ from app.database.session import get_db
 from app.models.complaint import Complaint
 from app.models.user import User
 from app.schemas.complaint_schema import ComplaintCreate, ComplaintStatusUpdate, ComplaintResponse
-from app.auth.dependencies import get_optional_user, require_role
+from app.auth.dependencies import get_current_user, require_role
 from app.services.audit_service import log_audit_event
 
 router = APIRouter(prefix="/api/complaints", tags=["Consumer Complaints"])
@@ -14,11 +14,11 @@ router = APIRouter(prefix="/api/complaints", tags=["Consumer Complaints"])
 @router.get("/", response_model=List[ComplaintResponse])
 def list_complaints(
     status_filter: Optional[str] = None,
-    current_user: Optional[User] = Depends(get_optional_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     query = db.query(Complaint)
-    if current_user and current_user.role == "Consumer":
+    if current_user.role == "Consumer":
         query = query.filter(Complaint.user_id == current_user.id)
     if status_filter:
         query = query.filter(Complaint.status == status_filter)
@@ -30,14 +30,14 @@ def list_complaints(
 def submit_complaint(
     req: ComplaintCreate,
     request: Request,
-    current_user: Optional[User] = Depends(get_optional_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     complaint = Complaint(
-        user_id=current_user.id if current_user else None,
+        user_id=current_user.id,
         product_id=req.product_id,
-        complainant_name=req.complainant_name,
-        complainant_contact=req.complainant_contact,
+        complainant_name=req.complainant_name or current_user.name,
+        complainant_contact=req.complainant_contact or current_user.phone or current_user.email,
         product_name=req.product_name,
         store_details=req.store_details,
         complaint_type=req.complaint_type or "Overcharging (Above MRP)",
@@ -56,7 +56,7 @@ def submit_complaint(
         entity_id=complaint.id,
         user=current_user,
         ip_address=request.client.host if request.client else "127.0.0.1",
-        details=f"Consumer grievance lodged against: {complaint.product_name}"
+        details=f"Consumer grievance lodged by user {current_user.id} ({current_user.email}) against: {complaint.product_name}"
     )
 
     return complaint

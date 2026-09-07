@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Authorized Officer Authentication Portal - Legal Metrology (Packaged Commodities) Rules 2011 Enforcement System. Department of Consumer Affairs, Government of India.">
+  <meta name="keywords" content="Officer Login, Legal Metrology, LMR 2011, Enforcement Inspector, Consumer Affairs, Government of India">
+  <meta name="author" content="Legal Metrology Directorate">
+  <title>Officer Authentication Portal | Legal Metrology Enforcement System (LMR 2011)</title>
+
+  <!-- Google Fonts & Stylesheet -->
+  <link rel="stylesheet" href="styles/login.css">
+  <link rel="stylesheet" href="styles/enhancements.css">
+</head>
+<body class="auth-body">
+
+  <!-- Top Government Security Banner -->
+  <header class="gov-topbar">
+    <div class="gov-topbar-left">
+      <div class="gov-flag-strip">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+      <span>GOVERNMENT OF INDIA • MINISTRY OF CONSUMER AFFAIRS • DIRECTORATE OF LEGAL METROLOGY</span>
+    </div>
+    <div class="gov-topbar-right">
+      <span class="security-badge-live">
+        <span class="pulse-dot"></span>
+        <span>NIC SECURE GATEWAY (TLS 1.3 / 256-BIT)</span>
+      </span>
+      <span>PORTAL REF: IND-LMR-2026-AUTH</span>
+      <!-- Dark Mode Toggle -->
+      <button class="dark-mode-toggle" id="darkModeToggle" title="Toggle Dark Mode" type="button" style="width:28px; height:28px; font-size:13px;">🌙</button>
+    </div>
+  </header>
+
+  <!-- Main Auth Page Grid -->
+  <main class="auth-container">
+    
+    <!-- Left Hero & Statutory Mandate -->
+    <section class="auth-branding">
+      <div class="brand-emblem-wrap">
+        <img src="assets/emblem.svg" alt="National Emblem of India" class="emblem-img">
+        <div class="brand-titles">
+          <h1>METROLOGY-AI</h1>
+          <span>ENFORCEMENT OFFICER PORTAL</span>
+        </div>
+      </div>
+
+      <p class="auth-hero-desc">
+        Authorized portal for Legal Metrology Inspectors, Lab Analysts, and Zonal Controllers. Real-time compliance auditing for pre-packaged commodities under <strong>Legal Metrology Act, 2009</strong>.
+      </p>
+
+      <div class="features-list">
+        <div class="feature-item">
+          <div class="feature-icon">🔍</div>
+          <div class="feature-text">
+            <strong>AI &amp; OCR Statutory Label Inspection</strong>
+            <p>Automated verification against Rule 6(1)(a-n), Schedule II font sizing, and mandatory USP calculations.</p>
+          </div>
+        </div>
+
+        <div class="feature-item">
+          <div class="feature-icon">⚖️</div>
+          <div class="feature-text">
+            <strong>Instant Section 36 Notice Generation</strong>
+            <p>Direct generation of compounding orders, statutory violation notices, and penalty compounding sheets.</p>
+          </div>
+        </div>
+
+        <div class="feature-item">
+          <div class="feature-icon">🛡️</div>
+          <div class="feature-text">
+            <strong>Tamper-Proof National Repository</strong>
+            <p>Audit logging of product seizures, laboratory reports, and digital chain of evidence.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="statutory-tagline">
+        <span>🏛️</span>
+        <div>
+          <strong>Statutory Compliance Mandate:</strong>
+          <span>Legal Metrology (Packaged Commodities) Rules, 2011</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Authentication Box -->
+    <section class="auth-card-wrap">
+      <div class="auth-card">
+        
+        <div class="auth-card-header">
+          <h2>🔐 Officer Sign In</h2>
+          <p>Enter authorized credentials to access enforcement tools</p>
+        </div>
+
+        <!-- Quick 1-Click Demo Profiles for SIH Hackathon Evaluation -->
+        <div class="demo-accounts-box">
+          <div class="demo-title">
+            <span>⚡ Quick Demo Credentials</span>
+            <small style="color:var(--text-muted); font-size:10px;">1-Click Autofill</small>
+          </div>
+          <div class="demo-pills">
+            <button type="button" class="demo-pill-btn" onclick="fillDemoCredentials(0)">
+              <span>👮 <strong>Insp. Rajesh Verma</strong> (Senior Inspector)</span>
+              <span class="role-tag">INSPECTOR</span>
+            </button>
+            <button type="button" class="demo-pill-btn" onclick="fillDemoCredentials(1)">
+              <span>🔬 <strong>Dr. Priya Sharma</strong> (Metrology Analyst)</span>
+              <span class="role-tag">ANALYST</span>
+            </button>
+            <button type="button" class="demo-pill-btn" onclick="fillDemoCredentials(2)">
+              <span>⚖️ <strong>Shri M. Sundaram</strong> (Asst. Controller)</span>
+              <span class="role-tag">CONTROLLER</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Auth Mode Tabs -->
+        <div class="auth-tabs">
+          <button type="button" class="auth-tab active" id="tabPasswordMode" onclick="switchAuthTab('password')">
+            <span>🔑 Password &amp; Captcha</span>
+          </button>
+          <button type="button" class="auth-tab" id="tabOtpMode" onclick="switchAuthTab('otp')">
+            <span>📱 e-Pramaan OTP</span>
+          </button>
+        </div>
+
+        <!-- Biometric Login Option -->
+        <div id="biometricContainer"></div>
+
+        <!-- Mode 1: Credentials Form -->
+        <form id="formPasswordAuth" onsubmit="handlePasswordLogin(event)">
+          <div class="form-group-auth">
+            <label for="officerIdentifier">Officer ID / Gov Email / Badge No.</label>
+            <div class="input-with-icon">
+              <span class="input-icon">🆔</span>
+              <input type="text" id="officerIdentifier" required placeholder="e.g. LM-INSP-4092 or rajesh.verma@nic.in" value="LM-INSP-4092" autocomplete="username">
+            </div>
+          </div>
+
+          <div class="form-group-auth">
+            <label for="officerPassword">Authorization Password</label>
+            <div class="input-with-icon">
+              <span class="input-icon">🔒</span>
+              <input type="password" id="officerPassword" required placeholder="Enter master password" value="password123" autocomplete="current-password">
+              <button type="button" class="toggle-pwd-btn" onclick="togglePasswordVisibility('officerPassword', this)" title="Toggle password visibility">👁️</button>
+            </div>
+          </div>
+
+          <!-- Dynamic Captcha Box -->
+          <div class="form-group-auth">
+            <label>Security Verification (Captcha)</label>
+            <div class="captcha-container">
+              <div class="captcha-canvas-box" id="captchaDisplay">7X8M2</div>
+              <button type="button" class="captcha-refresh-btn" onclick="generateCaptcha()" title="Refresh Captcha">🔄</button>
+              <input type="text" id="captchaInput" class="captcha-input" required placeholder="Enter Code" maxlength="6" autocomplete="off">
+            </div>
+          </div>
+
+          <button type="submit" class="btn-submit-auth" id="btnSubmitPassword">
+            <span>🛡️ Authorize &amp; Access Dashboard</span>
+          </button>
+        </form>
+
+        <!-- Mode 2: OTP / e-Pramaan Form -->
+        <form id="formOtpAuth" style="display:none;" onsubmit="handleOtpLogin(event)">
+          <div class="form-group-auth">
+            <label for="officerPhoneOrId">Registered Mobile No. or Officer ID</label>
+            <div class="input-with-icon">
+              <span class="input-icon">📱</span>
+              <input type="text" id="officerPhoneOrId" placeholder="e.g. 9876543210 or LM-INSP-4092" value="+91 98765 43210">
+            </div>
+          </div>
+
+          <div class="form-group-auth">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <label for="otpCodeInput" style="margin-bottom:0;">6-Digit e-Pramaan OTP</label>
+              <a href="javascript:void(0)" onclick="sendSimulatedOtp()" style="font-size:11px; color:var(--accent-cyan);">📲 Send / Resend OTP</a>
+            </div>
+            <div class="input-with-icon">
+              <span class="input-icon">🔢</span>
+              <input type="text" id="otpCodeInput" placeholder="Enter 6-digit OTP (e.g. 409200)" maxlength="6" value="409200">
+            </div>
+          </div>
+
+          <button type="submit" class="btn-submit-auth" id="btnSubmitOtp">
+            <span>⚡ Verify OTP &amp; Sign In</span>
+          </button>
+        </form>
+
+        <!-- Secondary Actions & Mode Switch -->
+        <div class="auth-secondary-links">
+          <a href="index.html" style="color:var(--accent-cyan); font-weight:700;">🏛️ Central Portal</a>
+          <a href="javascript:void(0)" onclick="showHelpModal()">❓ Helpdesk</a>
+        </div>
+
+        <!-- Login Activity Log -->
+        <div id="loginActivityContainer"></div>
+
+        <div class="auth-footer">
+          <p>Protected by Government of India IT Act, 2000 &amp; Legal Metrology Act, 2009.<br>Unauthorized access is punishable under Section 43 &amp; Section 66 of IT Act.</p>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Auth Script -->
+  <script src="scripts/auth.js"></script>
+  <!-- Enhancement Features -->
+  <script src="scripts/enhancements.js"></script>
+
+  <script>
+    let currentCaptchaText = '';
+
+    function generateCaptcha() {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let code = '';
+      for (let i = 0; i < 5; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      currentCaptchaText = code;
+      const display = document.getElementById('captchaDisplay');
+      if (display) display.textContent = code;
+      const input = document.getElementById('captchaInput');
+      if (input) input.value = code; // Pre-fill for convenience in demo
+    }
+
+    function switchAuthTab(mode) {
+      const tabPwd = document.getElementById('tabPasswordMode');
+      const tabOtp = document.getElementById('tabOtpMode');
+      const formPwd = document.getElementById('formPasswordAuth');
+      const formOtp = document.getElementById('formOtpAuth');
+
+      if (mode === 'password') {
+        tabPwd.classList.add('active');
+        tabOtp.classList.remove('active');
+        formPwd.style.display = 'block';
+        formOtp.style.display = 'none';
+      } else {
+        tabOtp.classList.add('active');
+        tabPwd.classList.remove('active');
+        formOtp.style.display = 'block';
+        formPwd.style.display = 'none';
+      }
+    }
+
+    function fillDemoCredentials(index) {
+      const officers = window.AuthManager ? window.AuthManager.getRegisteredOfficers() : [];
+      const officer = officers[index];
+      if (!officer) return;
+
+      document.getElementById('officerIdentifier').value = officer.id;
+      document.getElementById('officerPassword').value = officer.password || 'password123';
+      document.getElementById('officerPhoneOrId').value = officer.phone;
+      document.getElementById('otpCodeInput').value = '409200';
+      generateCaptcha();
+      showToast(`Selected Demo Profile: ${officer.name} (${officer.role})`, 'info');
+    }
+
+    function togglePasswordVisibility(fieldId, btn) {
+      const field = document.getElementById(fieldId);
+      if (!field) return;
+      if (field.type === 'password') {
+        field.type = 'text';
+        btn.textContent = '🙈';
+      } else {
+        field.type = 'password';
+        btn.textContent = '👁️';
+      }
+    }
+
+    function sendSimulatedOtp() {
+      const target = document.getElementById('officerPhoneOrId').value;
+      showToast(`OTP 409200 dispatched to registered terminal: ${target}`, 'info');
+      document.getElementById('otpCodeInput').value = '409200';
+    }
+
+    function handlePasswordLogin(e) {
+      e.preventDefault();
+      const id = document.getElementById('officerIdentifier').value;
+      const pwd = document.getElementById('officerPassword').value;
+      const captcha = document.getElementById('captchaInput').value.trim().toUpperCase();
+
+      if (captcha !== currentCaptchaText) {
+        showToast('Invalid Captcha security code. Please try again.', 'error');
+        generateCaptcha();
+        return;
+      }
+
+      const btn = document.getElementById('btnSubmitPassword');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-inline"></span> Authenticating with Central Metrology Gateway...';
+
+      setTimeout(() => {
+        const res = window.AuthManager.loginWithCredentials(id, pwd);
+        if (res.success) {
+          showToast(res.message, 'success');
+          setTimeout(() => {
+            window.location.href = 'index.html';
+          }, 800);
+        } else {
+          showToast(res.message, 'error');
+          btn.disabled = false;
+          btn.innerHTML = '<span>🛡️ Authorize &amp; Access Dashboard</span>';
+          generateCaptcha();
+        }
+      }, 700);
+    }
+
+    function handleOtpLogin(e) {
+      e.preventDefault();
+      const phoneOrId = document.getElementById('officerPhoneOrId').value;
+      const otp = document.getElementById('otpCodeInput').value;
+
+      const btn = document.getElementById('btnSubmitOtp');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-inline"></span> Verifying e-Pramaan Token...';
+
+      setTimeout(() => {
+        const res = window.AuthManager.loginWithOtp(phoneOrId, otp);
+        if (res.success) {
+          showToast(res.message, 'success');
+          setTimeout(() => {
+            window.location.href = 'index.html';
+          }, 800);
+        } else {
+          showToast(res.message, 'error');
+          btn.disabled = false;
+          btn.innerHTML = '<span>⚡ Verify OTP &amp; Sign In</span>';
+        }
+      }, 700);
+    }
+
+    function showHelpModal() {
+      showToast('Helpline: 1800-11-4000 (Toll Free) | Metrology IT Support: metrology-it@nic.in', 'info');
+    }
+
+    function showToast(message, type = 'info') {
+      const existing = document.querySelector('.toast-popup');
+      if (existing) existing.remove();
+
+      const toast = document.createElement('div');
+      toast.className = `toast-popup toast-${type}`;
+      toast.innerHTML = `<span>${message}</span>`;
+      document.body.appendChild(toast);
+
+      setTimeout(() => toast.classList.add('show'), 40);
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      generateCaptcha();
+    });
+  </script>
+</body>
+</html>

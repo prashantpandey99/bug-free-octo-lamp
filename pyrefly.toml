@@ -1,0 +1,14 @@
+search-paths = ["backend"]
+project-excludes = [
+  "**/node_modules",
+  "**/.venv",
+  "frontend",
+  "dist",
+  "build",
+  "legacy_prototype"
+]
+
+[errors]
+missing-import = "ignore"
+missing-source = "ignore"
+unannotated-attribute = "ignore"

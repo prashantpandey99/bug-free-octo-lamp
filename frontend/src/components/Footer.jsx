@@ -49,27 +49,27 @@ export default function Footer({ setActiveView }) {
             <h4>STATUTORY FRAMEWORK &amp; DESKS</h4>
             <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "9px", fontSize: "12px" }}>
               <li>
-                <a href="#checker" onClick={(e) => { e.preventDefault(); setActiveView && setActiveView("checker"); }}>
+                <a href="#checker" onClick={(e) => { e.preventDefault(); setActiveView?.("checker"); }}>
                   • Package Label Verification Tool (LMR 2011)
                 </a>
               </li>
               <li>
-                <a href="#rules" onClick={(e) => { e.preventDefault(); setActiveView && setActiveView("rules"); }}>
+                <a href="#rules" onClick={(e) => { e.preventDefault(); setActiveView?.("rules"); }}>
                   • Rule 6: Mandatory Principal Display Panel Declarations
                 </a>
               </li>
               <li>
-                <a href="#inspections" onClick={(e) => { e.preventDefault(); setActiveView && setActiveView("inspections"); }}>
-                  • Section 15 Market Inspection &amp; Surveillance Register
+                <a href="#inspections" onClick={(e) => { e.preventDefault(); setActiveView?.("inspections"); }}>
+                  • Section 15 Field Inspection &amp; Enforcement Register
                 </a>
               </li>
               <li>
-                <a href="#rules" onClick={(e) => { e.preventDefault(); setActiveView && setActiveView("rules"); }}>
+                <a href="#rules" onClick={(e) => { e.preventDefault(); setActiveView?.("rules"); }}>
                   • Section 36: Statutory Penalties &amp; Compounding Fees
                 </a>
               </li>
               <li>
-                <a href="#rules" onClick={(e) => { e.preventDefault(); setActiveView && setActiveView("rules"); }}>
+                <a href="#rules" onClick={(e) => { e.preventDefault(); setActiveView?.("rules"); }}>
                   • Second Schedule: Standard Packaged Quantities
                 </a>
               </li>

@@ -3,73 +3,117 @@ import { api } from "../services/api";
 
 const AuthContext = createContext(null);
 
-export const DEMO_CREDENTIALS = {
-  Admin: { email: "admin@doca.gov.in", password: "Admin@123", name: "Dr. Alok Srivastava", dept: "Directorate of Legal Metrology" },
-  Inspector: { email: "inspector@doca.gov.in", password: "Inspector@123", name: "Insp. Rajesh Verma", dept: "Enforcement Wing Zone-1" },
-  Manufacturer: { email: "mfg@shaktibhog.com", password: "Mfg@123", name: "Shakti Bhog Foods Ltd.", dept: "Registered Manufacturer" },
-  Seller: { email: "seller@retailhub.in", password: "Seller@123", name: "Reliance Retail Hub", dept: "Retail Merchant" },
-  Consumer: { email: "consumer@gmail.com", password: "Consumer@123", name: "Ramesh Kumar", dept: "Citizen Consumer" },
-};
-
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem("token") || null);
+  const [token, setToken] = useState(() => {
+    try {
+      return localStorage.getItem("token") || null;
+    } catch {
+      return null;
+    }
+  });
   const [loading, setLoading] = useState(true);
 
+  // Maintain authenticated session on load or token change
   useEffect(() => {
-    async function loadUser() {
+    let isMounted = true;
+
+    async function verifySession() {
       if (token) {
         try {
           const profile = await api.auth.getMe();
-          setUser(profile);
+          if (isMounted) {
+            setUser(profile);
+          }
         } catch (err) {
-          console.warn("Stored token invalid or expired. Logging out.");
-          localStorage.removeItem("token");
-          setToken(null);
+          console.warn("Session verification failed:", err.message);
+          const isAuthError =
+            err.status === 401 ||
+            err.status === 403 ||
+            err.message?.includes("401") ||
+            err.message?.includes("token");
+
+          if (isAuthError && isMounted) {
+            try {
+              localStorage.removeItem("token");
+            } catch (storageErr) {
+              console.error("Failed to clear invalid token from localStorage:", storageErr);
+            }
+            setToken(null);
+            setUser(null);
+          }
+        }
+      } else {
+        if (isMounted) {
           setUser(null);
         }
       }
-      setLoading(false);
+
+      if (isMounted) {
+        setLoading(false);
+      }
     }
-    loadUser();
+
+    verifySession();
+
+    return () => {
+      isMounted = false;
+    };
   }, [token]);
 
   const login = async (email, password) => {
     const res = await api.auth.login(email, password);
-    localStorage.setItem("token", res.access_token);
-    setToken(res.access_token);
-    setUser(res.user);
-    return res.user;
+    if (res?.access_token) {
+      try {
+        localStorage.setItem("token", res.access_token);
+      } catch (storageErr) {
+        console.error("Failed to save token to localStorage:", storageErr);
+      }
+      setToken(res.access_token);
+      setUser(res.user);
+      return res.user;
+    } else {
+      throw new Error("Invalid response format from authentication server.");
+    }
   };
 
-  const register = async (data) => {
-    const res = await api.auth.register(data);
-    localStorage.setItem("token", res.access_token);
-    setToken(res.access_token);
-    setUser(res.user);
-    return res.user;
+  const register = async (formData) => {
+    const res = await api.auth.register(formData);
+    if (res?.access_token) {
+      try {
+        localStorage.setItem("token", res.access_token);
+      } catch (storageErr) {
+        console.error("Failed to save token to localStorage:", storageErr);
+      }
+      setToken(res.access_token);
+      setUser(res.user);
+      return res.user;
+    } else {
+      throw new Error("Invalid response format from registration server.");
+    }
   };
 
   const logout = () => {
-    localStorage.removeItem("token");
+    try {
+      localStorage.removeItem("token");
+    } catch (storageErr) {
+      console.error("Failed to clear token from localStorage:", storageErr);
+    }
     setToken(null);
     setUser(null);
   };
 
-  const switchRole = async (role) => {
-    const creds = DEMO_CREDENTIALS[role];
-    if (creds) {
-      return await login(creds.email, creds.password);
-    }
-  };
-
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout, switchRole }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  return useContext(AuthContext);
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
 }

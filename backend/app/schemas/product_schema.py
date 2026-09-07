@@ -1,6 +1,5 @@
 from datetime import datetime
 from typing import Optional
-# pyrefly: ignore [missing-import]
 from pydantic import BaseModel, ConfigDict
 
 class ProductBase(BaseModel):
@@ -59,5 +58,5 @@ class ProductResponse(ProductBase):
 
     id: int
     manufacturer_id: Optional[int] = None
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None

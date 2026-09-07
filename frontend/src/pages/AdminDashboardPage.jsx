@@ -24,13 +24,16 @@ export default function AdminDashboardPage({ setActiveView }) {
     setLoading(true);
     try {
       const [statsData, usersData, logsData] = await Promise.all([
-        api.dashboard.stats(),
-        api.users.list(),
-        api.audit.list(20),
+        api.dashboard.stats().catch(() => null),
+        api.users.list().catch((err) => {
+          console.warn("Could not load users list:", err.message);
+          return [];
+        }),
+        api.audit.list(20).catch(() => []),
       ]);
       setStats(statsData);
-      setUsers(usersData);
-      setAuditLogs(logsData);
+      setUsers(usersData || []);
+      setAuditLogs(logsData || []);
     } catch (err) {
       console.error("Failed to load admin metrics:", err);
     } finally {
@@ -93,7 +96,22 @@ export default function AdminDashboardPage({ setActiveView }) {
             </p>
           </div>
 
-          <div style={{ display: "flex", gap: "10px" }}>
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            <button
+              onClick={() => setActiveView("officer_portal")}
+              className="btn btn-primary btn-sm"
+              style={{ display: "flex", alignItems: "center", gap: "6px", backgroundColor: "#B45309", border: "1px solid #92400E" }}
+              title="Review consumer grievances and update docket inquiry status"
+            >
+              <AlertTriangle size={14} /> Review Consumer Grievances
+            </button>
+            <button
+              onClick={() => setActiveView("inspections")}
+              className="btn btn-secondary btn-sm"
+              style={{ display: "flex", alignItems: "center", gap: "6px" }}
+            >
+              <FileText size={14} color="var(--gov-navy)" /> Field Inspection Register
+            </button>
             <button onClick={loadData} className="btn btn-secondary btn-sm">
               <RefreshCw size={14} /> Refresh
             </button>

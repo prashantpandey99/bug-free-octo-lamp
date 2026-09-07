@@ -1,5 +1,5 @@
-from typing import Optional
-from fastapi import APIRouter, Depends
+from typing import Optional, List
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.database.session import get_db
@@ -9,9 +9,40 @@ from app.models.inspection import Inspection, Violation
 from app.models.compliance_check import ComplianceCheck
 from app.models.complaint import Complaint
 from app.models.compliance_rule import ComplianceRule
+from app.models.audit_log import AuditLog
 from app.auth.dependencies import get_optional_user
 
 router = APIRouter(prefix="/api/dashboard", tags=["Dashboard & Analytics"])
+
+@router.get("/activity")
+def get_recent_activity(
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns real-time operations, inspections, grievances, and audit logs
+    performed across the Legal Metrology system.
+    """
+    logs = (
+        db.query(AuditLog)
+        .order_by(AuditLog.timestamp.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "id": l.id,
+            "action": l.action,
+            "entity": l.entity,
+            "entity_id": l.entity_id,
+            "user_email": l.user_email or "Authorized User",
+            "ip_address": l.ip_address or "127.0.0.1",
+            "details": l.details,
+            "timestamp": l.timestamp.strftime("%Y-%m-%d %H:%M:%S") if l.timestamp else "Recent",
+            "iso_time": l.timestamp.isoformat() if l.timestamp else None
+        }
+        for l in logs
+    ]
 
 @router.get("/stats")
 def get_dashboard_stats(
@@ -66,6 +97,19 @@ def get_dashboard_stats(
             "needs_review": review_count
         },
         "recent_inspections": inspections_list,
+        "recent_activity": [
+            {
+                "id": l.id,
+                "action": l.action,
+                "entity": l.entity,
+                "entity_id": l.entity_id,
+                "user_email": l.user_email or "Authorized User",
+                "details": l.details,
+                "timestamp": l.timestamp.strftime("%Y-%m-%d %H:%M:%S") if l.timestamp else "Recent",
+                "iso_time": l.timestamp.isoformat() if l.timestamp else None
+            }
+            for l in db.query(AuditLog).order_by(AuditLog.timestamp.desc()).limit(10).all()
+        ],
         "violation_severity_distribution": {
             "critical": db.query(Violation).filter(Violation.severity == "CRITICAL").count(),
             "high": db.query(Violation).filter(Violation.severity == "HIGH").count(),

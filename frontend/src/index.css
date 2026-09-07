@@ -383,13 +383,27 @@ a:hover {
   font-size: 12px;
   display: flex;
   align-items: center;
+  position: relative;
+  overflow: hidden;
 }
 
 .gov-ticker-content {
   display: flex;
   align-items: center;
-  gap: 12px;
-  overflow: hidden;
+  gap: 14px;
+  position: relative;
+  width: 100%;
+}
+
+.gov-ticker-badge-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  z-index: 5;
+  background-color: #FFFBEB;
+  padding-right: 6px;
+  position: relative;
 }
 
 .gov-ticker-badge {
@@ -397,18 +411,29 @@ a:hover {
   color: #FFFFFF;
   font-size: 10px;
   font-weight: 800;
-  padding: 2px 7px;
-  border-radius: 3px;
+  padding: 2px 8px;
+  border-radius: 4px;
   letter-spacing: 0.5px;
   text-transform: uppercase;
   flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(153, 27, 27, 0.2);
+}
+
+.gov-ticker-viewport {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+  mask-image: linear-gradient(to right, transparent 0%, black 16px, black calc(100% - 16px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 16px, black calc(100% - 16px), transparent 100%);
 }
 
 .gov-ticker-items {
-  display: flex;
+  display: inline-flex;
   gap: 28px;
   white-space: nowrap;
   animation: tickerSlide 40s linear infinite;
+  will-change: transform;
 }
 .gov-ticker-items:hover {
   animation-play-state: paused;
